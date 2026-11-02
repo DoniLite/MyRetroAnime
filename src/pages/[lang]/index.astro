@@ -1,0 +1,86 @@
+---
+import Base from "../../layouts/Base.astro";
+import { getAnimeOfYear } from "../../lib/anime";
+import { LANGS, type Lang, ui } from "../../lib/i18n";
+import { years } from "../../years";
+
+export function getStaticPaths() {
+	return LANGS.map((lang) => ({ params: { lang } }));
+}
+
+const lang = Astro.params.lang as Lang;
+const t = ui[lang];
+const currentYear = new Date().getFullYear();
+const departures = await Promise.all(
+	years.map(async ({ year, config }) => ({
+		year,
+		config,
+		count: (await getAnimeOfYear(year, lang)).length,
+	})),
+);
+---
+
+<Base lang={lang} title="MyRetroAnime" description={t.siteTagline} path="">
+	<main>
+		<h1>MyRetroAnime</h1>
+		<p class="muted">{t.siteTagline}</p>
+
+		<section aria-labelledby="departures">
+			<h2 id="departures" class="board-title">{t.departures}</h2>
+			<ul class="board">
+				{
+					departures.map(({ year, config, count }) => (
+						<li>
+							<a href={`/${lang}/${year}/`} class="row">
+								<span class="year">{year}</span>
+								<span class="line">{config.title[lang]}</span>
+								<span class="count">
+									{count} {t.animeCount}
+								</span>
+								<span class="badge">{year >= currentYear ? t.atPlatform : t.terminus}</span>
+							</a>
+						</li>
+					))
+				}
+			</ul>
+		</section>
+	</main>
+</Base>
+
+<style>
+	.board-title {
+		font-family: var(--font-mono);
+		text-transform: uppercase;
+		letter-spacing: 0.15em;
+		color: var(--accent);
+	}
+	.board {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		border: 1px solid var(--line);
+		border-radius: var(--radius);
+		background: var(--surface);
+	}
+	.row {
+		display: grid;
+		grid-template-columns: 4rem 1fr auto auto;
+		gap: 1rem;
+		align-items: center;
+		padding: 1rem;
+		font-family: var(--font-mono);
+		text-decoration: none;
+	}
+	.row:hover {
+		background: var(--line);
+	}
+	.year {
+		font-weight: 700;
+		color: var(--accent);
+	}
+	@media (max-width: 30rem) {
+		.row {
+			grid-template-columns: 4rem 1fr;
+		}
+	}
+</style>

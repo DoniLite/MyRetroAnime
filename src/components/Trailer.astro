@@ -1,0 +1,75 @@
+---
+import { type Lang, ui } from "../lib/i18n";
+
+interface Props {
+	youtubeId: string;
+	title: string;
+	lang: Lang;
+}
+
+const { youtubeId, title, lang } = Astro.props;
+---
+
+<!-- Facade: YouTube's player only loads (and only sets cookies) once the visitor asks for it. -->
+<div class="trailer" data-youtube-id={youtubeId} data-title={title}>
+	<button type="button" aria-label={`${ui[lang].playTrailer}: ${title}`}>
+		<img src={`https://i.ytimg.com/vi/${youtubeId}/hqdefault.jpg`} alt="" loading="lazy" />
+		<span class="play" aria-hidden="true">▶</span>
+	</button>
+</div>
+
+<script>
+	for (const trailer of document.querySelectorAll<HTMLElement>(".trailer")) {
+		trailer.querySelector("button")?.addEventListener("click", () => {
+			const iframe = document.createElement("iframe");
+			iframe.src = `https://www.youtube-nocookie.com/embed/${trailer.dataset.youtubeId}?autoplay=1`;
+			iframe.title = trailer.dataset.title ?? "Trailer";
+			iframe.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
+			iframe.allowFullscreen = true;
+			trailer.replaceChildren(iframe);
+			iframe.focus();
+		});
+	}
+</script>
+
+<style>
+	.trailer {
+		aspect-ratio: 16 / 9;
+		border-radius: var(--radius);
+		overflow: hidden;
+		background: #000;
+	}
+	.trailer button {
+		position: relative;
+		display: block;
+		width: 100%;
+		height: 100%;
+		padding: 0;
+		border: 0;
+		background: none;
+		cursor: pointer;
+	}
+	.trailer img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+	.play {
+		position: absolute;
+		inset: 0;
+		margin: auto;
+		width: 4rem;
+		height: 4rem;
+		display: grid;
+		place-items: center;
+		border-radius: 50%;
+		background: var(--accent);
+		color: var(--accent-ink);
+		font-size: 1.5rem;
+	}
+	.trailer :global(iframe) {
+		width: 100%;
+		height: 100%;
+		border: 0;
+	}
+</style>

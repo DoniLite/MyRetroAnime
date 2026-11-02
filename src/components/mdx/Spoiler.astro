@@ -1,0 +1,41 @@
+---
+// Usage in MDX: <Spoiler>Frieren meets Himmel again.</Spoiler>
+---
+
+<span class="spoiler">
+	<button type="button" class="cover" aria-expanded="false">Spoiler</button>
+	<span class="content"><slot /></span>
+</span>
+
+<script>
+	for (const cover of document.querySelectorAll<HTMLButtonElement>(".spoiler .cover")) {
+		cover.addEventListener("click", () => {
+			cover.setAttribute("aria-expanded", "true");
+			cover.parentElement?.setAttribute("data-revealed", "");
+		});
+	}
+</script>
+
+<style>
+	.cover {
+		font: inherit;
+		font-size: 0.85em;
+		padding: 0 0.5em;
+		border: 1px dashed var(--muted);
+		border-radius: 6px;
+		background: var(--surface);
+		color: var(--muted);
+		cursor: pointer;
+	}
+	.content {
+		display: none;
+	}
+	.spoiler[data-revealed] .cover,
+	:global(:root[data-spoilers="shown"]) .cover {
+		display: none;
+	}
+	.spoiler[data-revealed] .content,
+	:global(:root[data-spoilers="shown"]) .content {
+		display: revert;
+	}
+</style>

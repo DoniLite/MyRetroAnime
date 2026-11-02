@@ -1,0 +1,63 @@
+---
+import AnimeEntry from "../../../components/AnimeEntry.astro";
+import Base from "../../../layouts/Base.astro";
+import { getAnimeOfYear } from "../../../lib/anime";
+import { LANGS, ui } from "../../../lib/i18n";
+import { getYear, years } from "../../../years";
+
+export async function getStaticPaths() {
+	const paths = [];
+	for (const lang of LANGS) {
+		for (const { year } of years) {
+			const line = await getAnimeOfYear(year, lang);
+			for (const [index, anime] of line.entries()) {
+				paths.push({
+					params: { lang, year: String(year), anime: anime.slug },
+					props: {
+						lang,
+						anime,
+						previous: line[index - 1],
+						next: line[index + 1],
+					},
+				});
+			}
+		}
+	}
+	return paths;
+}
+
+const { lang, anime, previous, next } = Astro.props;
+const { config } = getYear(anime.year);
+const t = ui[lang];
+const base = `/${lang}/${anime.year}/`;
+const description = anime.text?.entry.data.pitch ?? config.tagline[lang];
+---
+
+<Base
+	lang={lang}
+	title={`${anime.info.title} · ${anime.year} · MyRetroAnime`}
+	description={description}
+	path={`${anime.year}/${anime.slug}/`}
+	theme={config.theme}
+>
+	<main>
+		<p><a href={base}>← {t.backToLine}</a></p>
+		<AnimeEntry anime={anime} lang={lang} />
+		<nav class="pager" aria-label={config.title[lang]}>
+			{previous && <a href={`${base}${previous.slug}/`} rel="prev">← {previous.info.title}</a>}
+			{next && <a href={`${base}${next.slug}/`} rel="next" class="next">{next.info.title} →</a>}
+		</nav>
+	</main>
+</Base>
+
+<style>
+	.pager {
+		display: flex;
+		gap: 1rem;
+		margin-top: 3rem;
+	}
+	.next {
+		margin-left: auto;
+		text-align: right;
+	}
+</style>

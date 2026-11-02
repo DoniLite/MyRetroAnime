@@ -1,0 +1,91 @@
+---
+import { render } from "astro:content";
+import type { Anime } from "../lib/anime";
+import { type Lang, ui } from "../lib/i18n";
+import AnimeHeader from "./AnimeHeader.astro";
+import Spoiler from "./mdx/Spoiler.astro";
+import Trailer from "./Trailer.astro";
+
+interface Props {
+	anime: Anime;
+	lang: Lang;
+}
+
+const { anime, lang } = Astro.props;
+const { info, meta, text } = anime;
+const rendered = text && (await render(text.entry));
+// Jikan's synopsis is English-only, so French pages show nothing rather than mixing languages.
+const pitch = text?.entry.data.pitch ?? (lang === "en" ? info.synopsis : null);
+---
+
+<article class="anime-entry">
+	{text?.fallback && <p class="fallback muted">{ui[lang].notTranslated}</p>}
+	<div class="intro">
+		{info.image && <img class="poster" src={info.image} alt="" width="225" height="318" />}
+		<div>
+			<AnimeHeader anime={anime} lang={lang} as="h1" />
+			{pitch && <p class="pitch" lang={text?.entry.data.pitch ? text.lang : "en"}>{pitch}</p>}
+		</div>
+	</div>
+
+	{info.trailerYoutubeId && <Trailer youtubeId={info.trailerYoutubeId} title={info.title} lang={lang} />}
+
+	{
+		meta.criteria.length > 0 && (
+			<dl class="criteria">
+				{meta.criteria.map((criterion) => (
+					<div>
+						<dt>{criterion.label[lang]}</dt>
+						<dd>{criterion.score}/10</dd>
+					</div>
+				))}
+			</dl>
+		)
+	}
+
+	{rendered && <div class="prose" lang={text.lang}><rendered.Content components={{ Spoiler }} /></div>}
+</article>
+
+<style>
+	.anime-entry {
+		display: grid;
+		gap: 1.5rem;
+	}
+	.intro {
+		display: grid;
+		grid-template-columns: minmax(0, 10rem) 1fr;
+		gap: 1.25rem;
+		align-items: start;
+	}
+	@media (max-width: 30rem) {
+		.intro {
+			grid-template-columns: 1fr;
+		}
+	}
+	.poster {
+		border-radius: var(--radius);
+	}
+	.pitch {
+		font-size: 1.1rem;
+	}
+	.criteria {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.75rem;
+		margin: 0;
+	}
+	.criteria div {
+		padding: 0.5rem 0.9rem;
+		border: 1px solid var(--line);
+		border-radius: var(--radius);
+	}
+	.criteria dd {
+		margin: 0;
+		font-family: var(--font-mono);
+		font-weight: 700;
+	}
+	.fallback {
+		margin: 0;
+		font-style: italic;
+	}
+</style>

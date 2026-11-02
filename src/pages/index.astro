@@ -1,0 +1,32 @@
+---
+import "../styles/global.css";
+import { LANGS, ui } from "../lib/i18n";
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>MyRetroAnime</title>
+		<meta name="description" content={ui.en.siteTagline} />
+		{LANGS.map((lang) => <link rel="alternate" hreflang={lang} href={new URL(`/${lang}/`, Astro.site).href} />)}
+		<script is:inline>
+			// Pages has no server redirects: pick the saved language, then the browser's, then English.
+			let lang;
+			try {
+				lang = localStorage.getItem("lang");
+			} catch {}
+			if (lang !== "fr" && lang !== "en") {
+				lang = navigator.languages.map((l) => l.slice(0, 2)).find((l) => l === "fr" || l === "en") ?? "en";
+			}
+			location.replace(`/${lang}/`);
+		</script>
+	</head>
+	<body>
+		<main>
+			<p>{ui.en.chooseLanguage} · {ui.fr.chooseLanguage}</p>
+			<p><a href="/en/" hreflang="en">English</a> · <a href="/fr/" hreflang="fr" lang="fr">Français</a></p>
+		</main>
+	</body>
+</html>

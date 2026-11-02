@@ -1,0 +1,35 @@
+---
+import { type Lang, ui } from "../lib/i18n";
+
+const { lang } = Astro.props as { lang: Lang };
+---
+
+<label class="spoiler-toggle">
+	<input type="checkbox" data-spoiler-toggle />
+	{ui[lang].showSpoilers}
+</label>
+
+<script>
+	const root = document.documentElement;
+	for (const input of document.querySelectorAll<HTMLInputElement>("[data-spoiler-toggle]")) {
+		input.checked = root.dataset.spoilers === "shown";
+		input.addEventListener("change", () => {
+			if (input.checked) root.dataset.spoilers = "shown";
+			else delete root.dataset.spoilers;
+			try {
+				localStorage.setItem("spoilers", input.checked ? "shown" : "hidden");
+			} catch {}
+		});
+	}
+</script>
+
+<style>
+	.spoiler-toggle {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		font-size: 0.85rem;
+		color: var(--muted);
+		cursor: pointer;
+	}
+</style>

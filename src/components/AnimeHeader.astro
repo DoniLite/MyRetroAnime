@@ -1,0 +1,57 @@
+---
+import type { Anime } from "../lib/anime";
+import { type Lang, seasonNames, ui } from "../lib/i18n";
+
+interface Props {
+	anime: Anime;
+	lang: Lang;
+	/** Heading level: h1 on the anime page, h3 on the line. */
+	as?: "h1" | "h3";
+}
+
+const { anime, lang, as: Heading = "h3" } = Astro.props;
+const { info, meta, airedSeason } = anime;
+const t = ui[lang];
+---
+
+<div class="anime-header">
+	<Heading class="title">{info.title}</Heading>
+	{info.titleJapanese && <p class="jp" lang="ja">{info.titleJapanese}</p>}
+	<p class="facts muted">
+		{[info.studios.join(", "), info.episodes && `${info.episodes} ${t.episodes}`].filter(Boolean).join(" · ")}
+	</p>
+	<p class="badges">
+		{
+			meta.status === "watching" && (
+				<span class="badge">
+					{t.watching}
+					{meta.episodesWatched !== undefined && ` · ${t.episode} ${meta.episodesWatched}/${info.episodes ?? "?"}`}
+				</span>
+			)
+		}
+		{airedSeason && <span class="badge">{t.airedIn} {seasonNames[lang][airedSeason.season]} {airedSeason.year}</span>}
+		<span class="score">{meta.score === null ? t.scorePending : `${meta.score}/10`}</span>
+	</p>
+</div>
+
+<style>
+	.title {
+		margin: 0;
+		line-height: 1.2;
+	}
+	.jp,
+	.facts {
+		margin: 0.2rem 0 0;
+	}
+	.badges {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem;
+		margin: 0.6rem 0 0;
+	}
+	.score {
+		font-family: var(--font-mono);
+		font-weight: 700;
+	}
+</style>

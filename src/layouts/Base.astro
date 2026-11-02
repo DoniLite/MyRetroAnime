@@ -1,0 +1,75 @@
+---
+import "../styles/global.css";
+import SpoilerToggle from "../components/SpoilerToggle.astro";
+import { LANGS, type Lang, otherLang } from "../lib/i18n";
+
+interface Props {
+	lang: Lang;
+	title: string;
+	description: string;
+	/** Path after the language prefix, e.g. "2026/" or "2026/frieren/". */
+	path: string;
+	theme?: Record<string, string>;
+}
+
+const { lang, title, description, path, theme } = Astro.props;
+const other = otherLang(lang);
+const href = (l: Lang) => new URL(`/${l}/${path}`, Astro.site).href;
+---
+
+<!doctype html>
+<html lang={lang}>
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>{title}</title>
+		<meta name="description" content={description} />
+		<meta property="og:title" content={title} />
+		<meta property="og:description" content={description} />
+		<link rel="canonical" href={href(lang)} />
+		{LANGS.map((l) => <link rel="alternate" hreflang={l} href={href(l)} />)}
+		<script is:inline>
+			try {
+				if (localStorage.getItem("spoilers") === "shown") document.documentElement.dataset.spoilers = "shown";
+			} catch {}
+		</script>
+	</head>
+	<body style={theme}>
+		<header class="topbar">
+			<a href={`/${lang}/`} class="brand">MyRetroAnime</a>
+			<SpoilerToggle lang={lang} />
+			<a href={`/${other}/${path}`} hreflang={other} lang={other} data-lang={other} class="lang-switch">
+				{other.toUpperCase()}
+			</a>
+		</header>
+		<slot />
+		<script>
+			for (const link of document.querySelectorAll<HTMLAnchorElement>("[data-lang]")) {
+				link.addEventListener("click", () => {
+					try {
+						localStorage.setItem("lang", link.dataset.lang ?? "");
+					} catch {}
+				});
+			}
+		</script>
+	</body>
+</html>
+
+<style>
+	.topbar {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		padding: 0.75rem 1rem;
+		border-bottom: 1px solid var(--line);
+	}
+	.brand {
+		font-weight: 700;
+		text-decoration: none;
+		margin-right: auto;
+	}
+	.lang-switch {
+		font-family: var(--font-mono);
+		padding: 0.5rem;
+	}
+</style>
