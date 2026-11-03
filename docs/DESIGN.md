@@ -14,24 +14,26 @@ A yearly, personal look back at the anime I watched. Each year is a **giga seaso
 ```
 src/
   content/<year>/<slug>/   one folder per anime (see "Content model")
-  years/<year>/index.ts    the year's identity: line name, tagline, theme tokens (later: its 3D scene)
+  years/<year>/index.ts    the year's identity: line name, tagline, theme tokens
+  years/<year>/Scene.tsx   the year's 3D layer (see "The 2026 experience")
   years/index.ts           registry of giga seasons, read through import.meta.glob
   lib/                     shared logic: seasons, i18n, Jikan, anime loading
   components/              shared UI (header, entry, trailer facade, spoilers)
   pages/                   routes
-scripts/                   new.ts (scaffold anime), sync-jikan.ts (refresh cache)
+scripts/                   new.ts (scaffold anime), sync-jikan.ts (refresh cache), trees.ts (generate 2026 tree models)
+public/models|textures/<year>/   the year's 3D assets, each folder with its LICENSE.md
 ```
 
 Adding a year = adding `src/years/<year>/index.ts`. Content in a year folder without a matching year module fails the build.
 
 ## Routes
 
-| URL                      | Page                                                                                                                           |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| `/`                      | Picks the saved language, then the browser language, then English, and redirects (client-side, Pages has no server redirects). |
-| `/{lang}/`               | The hall: a departures board listing every giga season. The current year is "at platform".                                     |
-| `/{lang}/{year}/`        | The year's line: stations grouped by season.                                                                                   |
-| `/{lang}/{year}/{slug}/` | One anime. Pre-rendered so links get real previews and SEO. Once the 3D lands, it opens the train at that station.             |
+| URL                      | Page                                                                                                                                            |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                      | Picks the saved language, then the browser language, then English, and redirects (client-side, Pages has no server redirects).                  |
+| `/{lang}/`               | The hall: a departures board listing every giga season. The current year is "at platform".                                                      |
+| `/{lang}/{year}/`        | The year's line: one scroll-snapped screen per stop (intro, season titles, stations).                                                           |
+| `/{lang}/{year}/{slug}/` | One anime. Pre-rendered so links get real previews and SEO. Renders the same line, scrolled to that station, with its entry open in the dialog. |
 
 ## Content model
 
@@ -71,7 +73,7 @@ Rules:
 3. Push to `main`. The workflow lints, tests, builds and deploys.
 4. `bun run sync` refreshes every `jikan.json` (episodes and trailers change while a show airs). A failed fetch keeps the old cache.
 
-The build never calls Jikan, so a Jikan outage never blocks a deploy.
+Metadata comes from the official MAL API when `MAL_CLIENT_ID` is set in `.env` (git-ignored; the newest MAL video becomes the trailer), and from Jikan otherwise. Both produce the same `jikan.json`. The build never calls either API, so an outage never blocks a deploy.
 
 ## MDX components
 
@@ -79,17 +81,36 @@ Available now: `<Spoiler>` (hidden until clicked; a global "show all spoilers" s
 
 Planned: `<Moment>` (key scene: image, episode, timestamp), `<Gallery>`, `<Clip>` (short MP4/WebM, ~3 MB max; longer goes to YouTube), `<Explain>` ("the detail you may have missed").
 
-## The 2026 experience: the Seasons Line (planned)
+## The year line (shared, `src/components/YearLine.astro`)
 
-- A train crosses four landscapes, one per season. Each anime is a station. The last stop is a **terminus** recapping the year (top picks, stats computed from `meta.json`, closing words), shown as "next stop: to be continued" until the year ends.
-- **Art direction:** painted, Makoto Shinkai style, generated mostly with shaders (sky, clouds, light, parallax silhouettes), a few assets.
-- **Camera:** window view from inside the carriage between stations, outside shots during season transitions.
-- **Navigation:** scroll or swipe moves the train and snaps to stations; arrow keys and a line mini-map jump directly.
-- **Content:** shown as an overlay inside the scene. The anime URL updates as the train moves.
-- **Fallback:** the 2D pages above are the baseline. 3D only mounts with WebGL, drops quality when the frame rate falls, goes static with `prefers-reduced-motion`, and a reading mode is always available.
-- **Sound:** ambient (train, rain, cicadas), off by default.
+- **Stops.** Intro, then for each season a season stop followed by its stations. Stop _i_ is scroll screen _i_, both in the HTML and in the 3D scene (the `Stop[]` passed to `SceneProps`).
+- **3D or 2D.** An inline script decides before first paint: WebGL 2 and no `prefers-reduced-motion` adds `has-3d` and `scene-loading` to `<html>`. `YearScene.tsx` then lazy-loads `src/years/<year>/Scene.tsx` (one chunk per year) and falls back to 2D only if that fails.
+- **Loading.** While `scene-loading` is set, scrolling is locked (wheel via `overflow: hidden`, keys and touch via listeners) and the canvas is invisible. The scene calls `onReady` once three's `DefaultLoadingManager` has drained (20 s timeout) and two frames have rendered; the canvas then fades in.
+- **3D mode.** Every stop is one viewport with scroll snapping; only the active stop's HTML is shown, fixed over the scene: the intro title, the station card bottom-left. Season headings are visually hidden: the scene writes the season into the landscape.
+- **Entries.** All entries are pre-rendered inside one `<dialog>`; "Get off here" shows the right one and swaps the URL to the anime page.
 
-The hall (`/{lang}/`) stays year-agnostic: a station hall with a split-flap departures board. Future years get their own platform and their own universe.
+Type: Shippori Mincho B1 for titles, Zen Kaku Gothic New for the UI (Google Fonts).
+
+## The 2026 experience: the Seasons Line
+
+The visitor sits in a train; scrolling moves it along the line, one stop per screen, through a realistic matte-painting landscape. Code in `src/years/2026/`:
+
+| File             | Role                                                                                                                                                                                                                                                    |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Scene.tsx`      | Canvas, camera (follows the scroll, eases like a train, widens its FOV on portrait screens), sky, light and fog, river, station platforms, season titles, telegraph poles, particles.                                                                   |
+| `terrain.ts`     | Pure, tested landscape maths: `heightAt` (meadow and river along the track; in front of every stop a valley opening straight ahead, walled by cliffs, closed by a hazy far range), `riverAt`, season blending along the line, and the terrain geometry. |
+| `scatter.ts`     | Where every tree and bush goes, by zone (far-bank tree curtain, woods on the slopes, bushes on the banks and the meadow, framing trees by the track between stops only). Deterministic.                                                                 |
+| `Vegetation.tsx` | Instances the ez-tree models from `public/models/2026/trees.glb`, with grayscale leaves tinted per season (bare deciduous trees in winter); wind-blown grass.                                                                                           |
+| `shaders.ts`     | Sky, terrain (triplanar Poly Haven rock, grass and snow with normal maps, aerial haze), water, grass, poles, particles. All custom shaders end with three's tone mapping and color space chunks.                                                        |
+| `palette.ts`     | Per-season colors and particle settings, blended in place every frame.                                                                                                                                                                                  |
+
+Layout rules that the tests guard: the river is the only water (ground never dips below `WATER_Y` elsewhere); a valley opens in front of every stop; no framing tree stands right in front of a resting stop. Stops are `SPACING` = 220 apart so valleys never overlap.
+
+Each station is a small Japanese platform on the neighbouring track (tiled deck with tactile strip, canopy, 駅名標 board, clock, bench, fence, vending machine, wooden station house). Season stops show a tall kanji and the season's name on the far bank, just in front of the tree curtain; the name shrinks to fit the canvas so long French names are never cut.
+
+Contract for any year: `src/years/<year>/Scene.tsx` default-exports a component taking `SceneProps` (`src/years/types.ts`) and calls `onReady` once its first complete frame is on screen.
+
+The hall (`/{lang}/`) stays year-agnostic: a departures board listing every giga season. Each future year gets its own universe.
 
 ## Out of scope for now
 
