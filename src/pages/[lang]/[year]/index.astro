@@ -1,9 +1,8 @@
 ---
-import AnimeHeader from "../../../components/AnimeHeader.astro";
+import YearLine from "../../../components/YearLine.astro";
 import Base from "../../../layouts/Base.astro";
 import { getAnimeOfYear } from "../../../lib/anime";
-import { LANGS, type Lang, seasonNames, ui } from "../../../lib/i18n";
-import { groupBySeason } from "../../../lib/seasons";
+import { LANGS, type Lang } from "../../../lib/i18n";
 import { getYear, years } from "../../../years";
 
 export function getStaticPaths() {
@@ -15,14 +14,9 @@ export function getStaticPaths() {
 const lang = Astro.params.lang as Lang;
 const year = Number(Astro.params.year);
 const { config } = getYear(year);
-const t = ui[lang];
 const anime = await getAnimeOfYear(year, lang);
-const seasons = groupBySeason(
-	anime.map((a) => ({ ...a, season: a.meta.season })),
-);
 ---
 
-<!-- 2D line: the readable baseline the 3D train will be layered on. -->
 <Base
 	lang={lang}
 	title={`${config.title[lang]} · ${year} · MyRetroAnime`}
@@ -30,54 +24,5 @@ const seasons = groupBySeason(
 	path={`${year}/`}
 	theme={config.theme}
 >
-	<main>
-		<p><a href={`/${lang}/`}>← {t.backToHall}</a></p>
-		<h1>{year} · {config.title[lang]}</h1>
-		<p class="muted">{config.tagline[lang]}</p>
-
-		{seasons.length === 0 && <p>{t.emptyLine}</p>}
-		{
-			seasons.map(({ season, items }) => (
-				<section aria-labelledby={season}>
-					<h2 id={season}>{seasonNames[lang][season]}</h2>
-					<ol class="stations">
-						{items.map((a) => (
-							<li>
-								<a href={`/${lang}/${year}/${a.slug}/`} class="station">
-									{a.info.image && <img src={a.info.image} alt="" width="96" height="136" loading="lazy" />}
-									<AnimeHeader anime={a} lang={lang} />
-								</a>
-							</li>
-						))}
-					</ol>
-				</section>
-			))
-		}
-	</main>
+	<YearLine lang={lang} year={year} config={config} anime={anime} />
 </Base>
-
-<style>
-	.stations {
-		list-style: none;
-		margin: 0;
-		padding: 0 0 0 1rem;
-		border-left: 3px solid var(--accent);
-		display: grid;
-		gap: 1rem;
-	}
-	.station {
-		display: grid;
-		grid-template-columns: 6rem 1fr;
-		gap: 1rem;
-		padding: 0.75rem;
-		border-radius: var(--radius);
-		background: var(--surface);
-		text-decoration: none;
-	}
-	.station:hover {
-		outline: 1px solid var(--accent);
-	}
-	.station img {
-		border-radius: 8px;
-	}
-</style>

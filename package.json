@@ -13,12 +13,22 @@
 	},
 	"dependencies": {
 		"@astrojs/mdx": "^8.1.2",
-		"astro": "^7.4.5"
+		"@astrojs/react": "^7.1.2",
+		"@dgreenheck/ez-tree": "^1.1.0",
+		"@react-three/fiber": "^9.8.2",
+		"astro": "^7.4.5",
+		"react": "^19.3.1",
+		"react-dom": "^19.3.1",
+		"three": "^0.187.0"
 	},
 	"devDependencies": {
 		"@astrojs/check": "^0.9.12",
 		"@biomejs/biome": "^2.6.4",
+		"@gltf-transform/core": "4",
 		"@types/bun": "^1.4.4",
+		"@types/react": "^19.3.0",
+		"@types/react-dom": "^19.3.0",
+		"@types/three": "^0.187.0",
 		"typescript": "6",
 		"vitest": "^5.1.0"
 	}

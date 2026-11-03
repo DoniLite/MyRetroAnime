@@ -1,0 +1,461 @@
+---
+import type { Anime } from "../lib/anime";
+import { type Lang, seasonNames, ui } from "../lib/i18n";
+import { groupBySeason, SEASONS } from "../lib/seasons";
+import type { Stop, YearConfig } from "../years/types";
+import AnimeEntry from "./AnimeEntry.astro";
+import AnimeHeader from "./AnimeHeader.astro";
+import YearScene from "./YearScene";
+
+interface Props {
+	lang: Lang;
+	year: number;
+	config: YearConfig;
+	anime: Anime[];
+	/** Slug whose entry is open on load (the anime page). */
+	open?: string;
+}
+
+const { lang, year, config, anime, open } = Astro.props;
+const t = ui[lang];
+const lineUrl = `/${lang}/${year}/`;
+const seasons = groupBySeason(
+	anime.map((a) => ({ ...a, season: a.meta.season })),
+);
+
+const stationNumber = new Map(
+	seasons.flatMap(({ items }) => items).map((a, i) => [a.slug, i + 1]),
+);
+
+// The 3D scene and the HTML stops must stay in the same order: stop i = scroll screen i.
+const stops: Stop[] = [
+	{ kind: "intro", season: seasons[0]?.season ?? SEASONS[0] },
+	...seasons.flatMap(({ season, items }): Stop[] => [
+		{ kind: "season", season, label: seasonNames[lang][season] },
+		...items.map(
+			(a): Stop => ({
+				kind: "station",
+				season,
+				slug: a.slug,
+				title: a.info.title,
+				titleJapanese: a.info.titleJapanese,
+				image: a.info.image,
+			}),
+		),
+	]),
+];
+---
+
+<!--
+	Decide 3D or 2D before the first paint (YearScene only falls back if loading fails): no flash of the 2D page,
+	and the landscape fades in behind the title once its first frame is ready.
+-->
+<script is:inline>
+	try {
+		const gl = document.createElement("canvas").getContext("webgl2");
+		if (gl && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+			const root = document.documentElement;
+			root.classList.add("has-3d", "scene-loading");
+			// overflow: hidden stops the wheel; keys and touch need their own guard until the scene is ready.
+			const keys = new Set(["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End", " "]);
+			const block = (event) => {
+				if (!root.classList.contains("scene-loading")) return;
+				if (event.type === "touchmove" || keys.has(event.key)) event.preventDefault();
+			};
+			addEventListener("keydown", block);
+			addEventListener("touchmove", block, { passive: false });
+		}
+	} catch {}
+</script>
+<main class="line" data-line-url={lineUrl}>
+	<YearScene client:only="react" year={year} stops={stops} />
+	<div class="window" aria-hidden="true"></div>
+
+	<section class="stop intro">
+		<div class="intro-card">
+			<a class="back" href={`/${lang}/`}>← {t.backToHall}</a>
+			<p class="eyebrow">{year}</p>
+			<h1>{config.title[lang]}</h1>
+			<p class="tagline">{config.tagline[lang]}</p>
+			{
+				anime.length === 0 ? (
+					<p>{t.emptyLine}</p>
+				) : (
+					<p class="hint" aria-live="polite">
+						<span class="hint-loading">{t.loading}</span>
+						<span class="hint-ready">{t.scrollHint}</span>
+					</p>
+				)
+			}
+		</div>
+	</section>
+
+	{
+		seasons.map(({ season, items }) => (
+			<>
+				<section class="stop season-stop" data-season={season}>
+					<h2 id={season}>{seasonNames[lang][season]}</h2>
+				</section>
+				{items.map((a) => (
+					<section class="stop station-stop" id={`stop-${a.slug}`}>
+						<a href={`${lineUrl}${a.slug}/`} class="station" data-open={a.slug}>
+							{a.info.image && <img src={a.info.image} alt="" width="96" height="136" loading="lazy" />}
+							<div class="station-body">
+								<p class="eyebrow">
+									{seasonNames[lang][season]} · {t.station} {stationNumber.get(a.slug)}/{anime.length}
+								</p>
+								<AnimeHeader anime={a} lang={lang} />
+								<span class="cta">{t.openStation} <span aria-hidden="true">→</span></span>
+							</div>
+						</a>
+					</section>
+				))}
+			</>
+		))
+	}
+</main>
+
+<!-- Server-rendered `open` keeps the anime page readable without JS; the script upgrades it to a modal. -->
+<dialog class="entry-dialog" open={open ? true : undefined} aria-label={config.title[lang]}>
+	<form method="dialog" class="close-form">
+		<button class="close" aria-label={t.close}>✕</button>
+	</form>
+	{
+		anime.map((a) => (
+			<div data-entry={a.slug} hidden={a.slug !== open}>
+				<AnimeEntry anime={a} lang={lang} />
+			</div>
+		))
+	}
+</dialog>
+
+<script>
+	const line = document.querySelector<HTMLElement>("[data-line-url]");
+	const dialog = document.querySelector<HTMLDialogElement>(".entry-dialog");
+	if (line && dialog) {
+		const lineUrl = line.dataset.lineUrl ?? "/";
+		const stops = [...line.querySelectorAll<HTMLElement>(".stop")];
+
+		// The stop filling the screen is "active": in 3D mode only its card is shown.
+		const observer = new IntersectionObserver(
+			(entries) => {
+				for (const entry of entries) {
+					entry.target.toggleAttribute("data-active", entry.isIntersecting);
+				}
+			},
+			{ threshold: 0.6 },
+		);
+		for (const stop of stops) observer.observe(stop);
+
+		const show = (slug: string) => {
+			for (const entry of dialog.querySelectorAll<HTMLElement>("[data-entry]")) {
+				entry.hidden = entry.dataset.entry !== slug;
+			}
+			if (!dialog.open) dialog.showModal();
+			dialog.scrollTop = 0;
+			history.replaceState(null, "", `${lineUrl}${slug}/`);
+		};
+		const scrollToStop = (slug: string) =>
+			document.getElementById(`stop-${slug}`)?.scrollIntoView({ behavior: "instant" });
+
+		for (const link of line.querySelectorAll<HTMLAnchorElement>("[data-open]")) {
+			link.addEventListener("click", (event) => {
+				event.preventDefault();
+				show(link.dataset.open ?? "");
+			});
+		}
+		dialog.addEventListener("close", () => history.replaceState(null, "", lineUrl));
+		dialog.addEventListener("click", (event) => {
+			if (event.target === dialog) dialog.close(); // click on the backdrop
+		});
+
+		const initial = dialog.querySelector<HTMLElement>("[data-entry]:not([hidden])")?.dataset.entry;
+		if (dialog.hasAttribute("open") && initial) {
+			dialog.removeAttribute("open");
+			scrollToStop(initial);
+			show(initial);
+			// Switching to 3D changes every stop's height: put the train back at this station.
+			window.addEventListener("line:3d", () => scrollToStop(initial), { once: true });
+		}
+	}
+</script>
+
+<style>
+	.line {
+		max-width: 64rem;
+		margin: 0 auto;
+		padding: 1.5rem 1rem 4rem;
+	}
+	.eyebrow {
+		margin: 0 0 0.35rem;
+		font-size: 0.72rem;
+		font-weight: 700;
+		letter-spacing: 0.16em;
+		text-transform: uppercase;
+		color: var(--accent);
+	}
+	.station {
+		position: relative;
+		display: grid;
+		grid-template-columns: 5.5rem 1fr;
+		gap: 1rem;
+		padding: 1rem;
+		border-radius: 14px;
+		background: var(--surface);
+		text-decoration: none;
+		overflow: hidden;
+	}
+	/* The line's color stripe, as on every Japanese platform sign. */
+	.station::before {
+		content: "";
+		position: absolute;
+		inset: 0 0 auto;
+		height: 4px;
+		background: var(--accent);
+	}
+	.station img {
+		width: 100%;
+		border-radius: 8px;
+		box-shadow: 0 8px 20px rgb(0 0 0 / 0.35);
+	}
+	.station-body :global(.title) {
+		font-size: 1.3rem;
+		text-wrap: balance;
+	}
+	.station-stop {
+		margin: 0 0 1rem;
+	}
+	.cta {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		margin-top: 0.85rem;
+		padding: 0.45rem 0.95rem;
+		border-radius: 999px;
+		background: var(--accent);
+		color: var(--accent-ink);
+		font-size: 0.85rem;
+		font-weight: 700;
+		transition: transform 0.2s ease;
+	}
+	.station:hover .cta,
+	.station:focus-visible .cta {
+		transform: translateX(3px);
+	}
+	.back {
+		display: inline-block;
+		margin-bottom: 1.5rem;
+		font-size: 0.85rem;
+		color: var(--muted);
+		text-decoration: none;
+	}
+	.back:hover {
+		color: var(--ink);
+	}
+	.intro-card h1 {
+		margin: 0;
+		font-size: clamp(2.8rem, 7.5vw, 5.8rem);
+		line-height: 1;
+		letter-spacing: -0.01em;
+	}
+	.intro-card .eyebrow {
+		font-size: clamp(0.9rem, 1.6vw, 1.1rem);
+		letter-spacing: 0.4em;
+		margin-bottom: 0.75rem;
+	}
+	.tagline {
+		margin: 1rem 0 0;
+		max-width: 30rem;
+		font-size: clamp(1.05rem, 1.8vw, 1.3rem);
+		line-height: 1.5;
+		color: var(--muted);
+	}
+	.hint {
+		display: none;
+	}
+	.window {
+		display: none;
+	}
+
+	.entry-dialog {
+		width: min(54rem, calc(100% - 2rem));
+		max-height: calc(100dvh - 2rem);
+		padding: 0;
+		border: 1px solid var(--line);
+		border-radius: calc(var(--radius) * 1.5);
+		background: var(--bg);
+		color: var(--ink);
+		box-shadow: 0 30px 80px rgb(0 0 0 / 0.55);
+	}
+	.entry-dialog::backdrop {
+		background: rgb(5 6 12 / 0.55);
+		backdrop-filter: blur(6px);
+	}
+	.close-form {
+		position: sticky;
+		top: 0;
+		z-index: 2;
+		display: flex;
+		justify-content: flex-end;
+		height: 0;
+		padding-right: 0.75rem;
+	}
+	.close {
+		margin-top: 0.75rem;
+		width: 2.75rem;
+		height: 2.75rem;
+		border: 1px solid rgb(255 255 255 / 0.15);
+		border-radius: 50%;
+		background: rgb(10 8 16 / 0.6);
+		backdrop-filter: blur(8px);
+		color: #fff;
+		font-size: 1.1rem;
+		cursor: pointer;
+	}
+	:global(:root:has(.entry-dialog[open])) {
+		overflow: hidden;
+	}
+
+	/* 3D mode: one stop per screen, the landscape behind, only the active stop's card visible. */
+	:global(:root.has-3d) {
+		scroll-snap-type: y mandatory;
+	}
+	:global(.scene-canvas) {
+		transition: opacity 1.4s ease;
+	}
+	:global(:root.scene-loading .scene-canvas) {
+		opacity: 0;
+	}
+	/* No riding before the landscape is complete: scrolling stays locked until the scene has loaded. */
+	:global(:root.scene-loading) {
+		overflow: hidden;
+	}
+	.hint-loading,
+	:global(:root.scene-loading) .hint-ready {
+		display: none;
+	}
+	:global(:root.scene-loading) .hint-loading {
+		display: inline;
+		animation: pulse 1.6s ease-in-out infinite;
+	}
+	@keyframes pulse {
+		50% {
+			opacity: 0.45;
+		}
+	}
+	:global(:root.has-3d .topbar) {
+		position: fixed;
+		inset: 0 0 auto;
+		z-index: 3;
+		border: 0;
+		/* Floats over the landscape: only a faint shade keeps the brand legible. */
+		background: linear-gradient(rgb(10 8 14 / 0.35), transparent);
+	}
+	:global(.has-3d) .line {
+		max-width: none;
+		padding: 0;
+	}
+	:global(.has-3d) .stop {
+		height: 100svh;
+		margin: 0;
+		padding: 0;
+		border: 0;
+		scroll-snap-align: start;
+		scroll-snap-stop: always;
+	}
+	:global(.has-3d) .stop > * {
+		position: fixed;
+		z-index: 2;
+		opacity: 0;
+		pointer-events: none;
+		transition: opacity 0.6s ease;
+	}
+	:global(.has-3d) .stop[data-active] > * {
+		opacity: 1;
+		pointer-events: auto;
+	}
+	:global(.has-3d) .window {
+		display: block;
+		position: fixed;
+		inset: clamp(0.75rem, 3vmin, 2rem);
+		z-index: 1;
+		border-radius: clamp(1rem, 5vmin, 3.5rem);
+		/* The carriage wall around the window, plus a faint glass reflection. */
+		box-shadow:
+			0 0 0 100vmax #191420,
+			inset 0 0 0 6px #2b2333,
+			inset 0 0 60px rgb(0 0 0 / 0.35);
+		background: linear-gradient(115deg, rgb(255 255 255 / 0.07), transparent 35%);
+		pointer-events: none;
+	}
+	/* Over the landscape: an editorial title on the left, on a soft scrim rather than in a box. */
+	:global(.has-3d) .intro-card {
+		left: clamp(1.5rem, 7vw, 6rem);
+		top: 50%;
+		translate: 0 -50%;
+		width: min(44rem, calc(100% - 3rem));
+		text-shadow:
+			0 2px 6px rgb(10 12 24 / 0.5),
+			0 4px 40px rgb(10 12 24 / 0.6);
+	}
+	:global(.has-3d) .intro-card::before {
+		content: "";
+		position: absolute;
+		inset: -40vh -20vw -40vh -30vw;
+		z-index: -1;
+		background: radial-gradient(closest-side, rgb(10 12 24 / 0.68), transparent);
+		pointer-events: none;
+	}
+	:global(.has-3d) .tagline,
+	:global(.has-3d) .back {
+		color: rgb(255 255 255 / 0.85);
+	}
+	:global(.has-3d) .hint {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		margin-top: 2rem;
+		font-size: 0.85rem;
+		letter-spacing: 0.08em;
+	}
+	:global(.has-3d) .hint::after {
+		content: "";
+		width: 3rem;
+		height: 1px;
+		background: currentColor;
+		animation: hint 2.4s ease-in-out infinite;
+		transform-origin: left;
+	}
+	/* The landscape writes the season itself; the heading stays for screen readers. */
+	:global(.has-3d) .season-stop h2 {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		opacity: 1;
+	}
+	:global(.has-3d) .station {
+		left: clamp(1rem, 4vmin, 3rem);
+		bottom: clamp(1rem, 4vmin, 3rem);
+		width: min(27rem, calc(100% - 2rem));
+		background: rgb(14 12 22 / 0.62);
+		backdrop-filter: blur(14px) saturate(1.2);
+		border: 1px solid rgb(255 255 255 / 0.1);
+		box-shadow: 0 18px 50px rgb(0 0 0 / 0.4);
+	}
+	@media (max-width: 30rem) {
+		:global(.has-3d) .station {
+			left: 0.75rem;
+			right: 0.75rem;
+			width: auto;
+			bottom: 0.75rem;
+			grid-template-columns: 4.5rem 1fr;
+		}
+	}
+	@keyframes hint {
+		50% {
+			transform: scaleX(0.4);
+		}
+	}
+</style>
