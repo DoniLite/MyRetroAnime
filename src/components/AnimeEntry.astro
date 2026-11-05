@@ -26,7 +26,7 @@ const synopsis = !pitch && lang === "en" ? info.synopsis : null;
 		<div class="hero-text">
 			<AnimeHeader anime={anime} lang={lang} as="h1" />
 			{pitch && <p class="pitch" lang={text.lang}>{pitch}</p>}
-			<a class="mal" href={info.url} target="_blank" rel="noopener">MyAnimeList ↗</a>
+			<a class="mal" href={`https://myanimelist.net/anime/${meta.malId}`} target="_blank" rel="noopener">MyAnimeList ↗</a>
 		</div>
 	</header>
 

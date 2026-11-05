@@ -40,6 +40,12 @@ export default function YearScene({
 		document.documentElement.classList.remove("scene-loading");
 		window.dispatchEvent(new Event("line:3d"));
 	}, []);
+	const onFail = useCallback(() => {
+		document.documentElement.classList.remove("has-3d", "scene-loading");
+		setScene(undefined);
+	}, []);
 
-	return Scene ? <Scene stops={stops} onReady={onReady} /> : null;
+	return Scene ? (
+		<Scene stops={stops} onReady={onReady} onFail={onFail} />
+	) : null;
 }

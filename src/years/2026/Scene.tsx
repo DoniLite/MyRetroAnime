@@ -51,10 +51,14 @@ function halfHeightAt(z: number) {
 	return Math.tan(((CAMERA.maxFov / 2) * Math.PI) / 180) * (CAMERA.z - z);
 }
 
-/** Scroll position as a fractional stop index (0 = intro, n-1 = last stop). */
+/**
+ * Scroll position as a fractional stop index (0 = intro, n-1 = last stop). Measured against a real
+ * stop (100svh in YearLine), not the window: on phones innerHeight changes as the browser bars slide.
+ */
 function scrollProgress(count: number) {
-	const max = document.documentElement.scrollHeight - innerHeight;
-	return max > 0 ? Math.min(1, Math.max(0, scrollY / max)) * (count - 1) : 0;
+	const stop =
+		document.querySelector<HTMLElement>(".stop")?.offsetHeight || innerHeight;
+	return Math.min(count - 1, Math.max(0, scrollY / stop));
 }
 
 const toRadians = Math.PI / 180;
@@ -66,29 +70,45 @@ function fovFor(aspect: number) {
 	return Math.min(CAMERA.maxFov, Math.max(CAMERA.fov, needed));
 }
 
-/** Give up waiting for slow assets after this long and let the visitor in anyway. */
-const LOAD_TIMEOUT = 20_000;
-
-export default function Scene({ stops, onReady }: SceneProps) {
+export default function Scene({ stops, onReady, onFail }: SceneProps) {
 	const [assetsLoaded, setAssetsLoaded] = useState(false);
+	const [fontsLoaded, setFontsLoaded] = useState(false);
 	const [canvasReady, setCanvasReady] = useState(false);
 
 	// Every model and texture goes through three's default loading manager; it reports when the queue
 	// drains. Subscribed before the canvas renders its children, so no load can finish unseen.
+	// A failed asset means a broken landscape: hand over to the 2D line instead of revealing it.
 	useLayoutEffect(() => {
-		DefaultLoadingManager.onLoad = () => setAssetsLoaded(true);
-		const timeout = setTimeout(() => setAssetsLoaded(true), LOAD_TIMEOUT);
+		let failed = false;
+		DefaultLoadingManager.onError = () => {
+			failed = true;
+		};
+		DefaultLoadingManager.onLoad = () =>
+			failed ? onFail?.() : setAssetsLoaded(true);
 		return () => {
 			DefaultLoadingManager.onLoad = () => {};
-			clearTimeout(timeout);
+			DefaultLoadingManager.onError = () => {};
 		};
-	}, []);
+	}, [onFail]);
+
+	// The season titles are drawn with the display font: wait for it so they never pop in late.
+	useEffect(() => {
+		const text = stops
+			.map((stop) =>
+				stop.kind === "season" ? KANJI[stop.season] + stop.label : "",
+			)
+			.join("");
+		document.fonts
+			.load(seasonFont(320), text)
+			.catch(() => undefined)
+			.then(() => setFontsLoaded(true));
+	}, [stops]);
 
 	useEffect(() => {
-		if (!assetsLoaded || !canvasReady) return;
+		if (!assetsLoaded || !fontsLoaded || !canvasReady) return;
 		// Two frames: the first uploads the new textures and compiles shaders, the second is what is seen.
 		requestAnimationFrame(() => requestAnimationFrame(() => onReady?.()));
-	}, [assetsLoaded, canvasReady, onReady]);
+	}, [assetsLoaded, fontsLoaded, canvasReady, onReady]);
 
 	return (
 		<Canvas
@@ -450,6 +470,8 @@ function River({
 }
 
 const KANJI = { winter: "冬", spring: "春", summer: "夏", fall: "秋" } as const;
+const seasonFont = (size: number) =>
+	`800 ${size}px "Shippori Mincho B1", serif`;
 // On the far bank, just in front of its curtain of trees: only bushes and the odd treetop overlap it.
 // Same apparent size and place as at depth 78 / height 38, scaled down with the distance.
 const SEASON_TITLE = { depth: 24, height: 16.6 };
@@ -465,8 +487,7 @@ function SeasonTitle({
 	const [texture, setTexture] = useState<CanvasTexture>();
 	useEffect(() => {
 		let cancelled = false;
-		const display = (size: number) =>
-			`800 ${size}px "Shippori Mincho B1", serif`;
+		const display = seasonFont;
 		// The canvas only uses the web font once it has loaded; fall back to serif if it never does.
 		document.fonts
 			.load(display(320), KANJI[stop.season] + stop.label)

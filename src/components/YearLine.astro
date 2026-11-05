@@ -64,6 +64,10 @@ const stops: Stop[] = [
 			};
 			addEventListener("keydown", block);
 			addEventListener("touchmove", block, { passive: false });
+			// Last resort if the scene crashes or hangs: never leave the visitor locked out.
+			setTimeout(() => {
+				if (root.classList.contains("scene-loading")) root.classList.remove("has-3d", "scene-loading");
+			}, 30000);
 		}
 	} catch {}
 </script>
@@ -137,23 +141,36 @@ const stops: Stop[] = [
 		const stops = [...line.querySelectorAll<HTMLElement>(".stop")];
 
 		// The stop filling the screen is "active": in 3D mode only its card is shown.
+		// isIntersecting is true for any overlap, so the ratio decides: one stop at a time.
 		const observer = new IntersectionObserver(
 			(entries) => {
 				for (const entry of entries) {
-					entry.target.toggleAttribute("data-active", entry.isIntersecting);
+					entry.target.toggleAttribute("data-active", entry.intersectionRatio >= 0.6);
 				}
 			},
 			{ threshold: 0.6 },
 		);
 		for (const stop of stops) observer.observe(stop);
 
-		const show = (slug: string) => {
+		// The language switch follows the URL, so switching languages keeps the open entry.
+		const syncLangLinks = () => {
+			for (const link of document.querySelectorAll<HTMLAnchorElement>("a[data-lang]")) {
+				link.pathname = location.pathname.replace(/^\/[a-z]{2}\//, `/${link.dataset.lang}/`);
+			}
+		};
+		const go = (url: string, entry: string | null, push: boolean) => {
+			history[push ? "pushState" : "replaceState"]({ entry, pushed: push }, "", url);
+			syncLangLinks();
+		};
+
+		// Opening an entry from the line adds a history step, so Back closes it.
+		const show = (slug: string, push = true) => {
 			for (const entry of dialog.querySelectorAll<HTMLElement>("[data-entry]")) {
 				entry.hidden = entry.dataset.entry !== slug;
 			}
 			if (!dialog.open) dialog.showModal();
 			dialog.scrollTop = 0;
-			history.replaceState(null, "", `${lineUrl}${slug}/`);
+			go(`${lineUrl}${slug}/`, slug, push);
 		};
 		const scrollToStop = (slug: string) =>
 			document.getElementById(`stop-${slug}`)?.scrollIntoView({ behavior: "instant" });
@@ -164,7 +181,15 @@ const stops: Stop[] = [
 				show(link.dataset.open ?? "");
 			});
 		}
-		dialog.addEventListener("close", () => history.replaceState(null, "", lineUrl));
+		dialog.addEventListener("close", () => {
+			// Deferred: the ✕ button closes through a form submission, which would cancel a Back started now.
+			if (history.state?.entry && history.state.pushed) setTimeout(() => history.back());
+			else go(lineUrl, null, false);
+		});
+		addEventListener("popstate", () => {
+			if (!history.state?.entry && dialog.open) dialog.close();
+			syncLangLinks();
+		});
 		dialog.addEventListener("click", (event) => {
 			if (event.target === dialog) dialog.close(); // click on the backdrop
 		});
@@ -173,7 +198,7 @@ const stops: Stop[] = [
 		if (dialog.hasAttribute("open") && initial) {
 			dialog.removeAttribute("open");
 			scrollToStop(initial);
-			show(initial);
+			show(initial, false);
 			// Switching to 3D changes every stop's height: put the train back at this station.
 			window.addEventListener("line:3d", () => scrollToStop(initial), { once: true });
 		}
@@ -325,6 +350,9 @@ const stops: Stop[] = [
 	}
 	:global(:root.scene-loading .scene-canvas) {
 		opacity: 0;
+	}
+	:global(:root:not(.has-3d) .scene-canvas) {
+		display: none;
 	}
 	/* No riding before the landscape is complete: scrolling stays locked until the scene has loaded. */
 	:global(:root.scene-loading) {

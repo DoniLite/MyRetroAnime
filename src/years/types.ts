@@ -29,4 +29,6 @@ export interface SceneProps {
 	stops: Stop[];
 	/** Called once the first frame is on screen, so the page can fade the scene in. */
 	onReady?: () => void;
+	/** Called when a required asset fails to load: the page falls back to the 2D line. */
+	onFail?: () => void;
 }
