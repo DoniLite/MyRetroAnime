@@ -2,7 +2,7 @@
 
 A yearly look back at the anime that marked me, one **giga season** per year. Live at [myretroanime.donilite.me](https://myretroanime.donilite.me).
 
-Built with Astro, deployed to GitHub Pages. See [docs/DESIGN.md](docs/DESIGN.md) for how it works.
+Built with Astro and React Three Fiber, deployed to GitHub Pages. See [docs/ROADMAP.md](docs/ROADMAP.md) for the goal and what comes next, [docs/DESIGN.md](docs/DESIGN.md) for how it works.
 
 ## Commands
 

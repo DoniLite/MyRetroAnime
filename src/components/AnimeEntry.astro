@@ -13,60 +13,131 @@ interface Props {
 
 const { anime, lang } = Astro.props;
 const { info, meta, text } = anime;
+const t = ui[lang];
 const rendered = text && (await render(text.entry));
-// Jikan's synopsis is English-only, so French pages show nothing rather than mixing languages.
-const pitch = text?.entry.data.pitch ?? (lang === "en" ? info.synopsis : null);
+const pitch = text?.entry.data.pitch;
+// MAL's synopsis is English-only and long: tucked away, and never shown on French pages.
+const synopsis = !pitch && lang === "en" ? info.synopsis : null;
 ---
 
 <article class="anime-entry">
-	{text?.fallback && <p class="fallback muted">{ui[lang].notTranslated}</p>}
-	<div class="intro">
+	<header class="hero" style={info.image ? `--poster: url("${info.image}")` : undefined}>
 		{info.image && <img class="poster" src={info.image} alt="" width="225" height="318" />}
-		<div>
+		<div class="hero-text">
 			<AnimeHeader anime={anime} lang={lang} as="h1" />
-			{pitch && <p class="pitch" lang={text?.entry.data.pitch ? text.lang : "en"}>{pitch}</p>}
+			{pitch && <p class="pitch" lang={text.lang}>{pitch}</p>}
+			<a class="mal" href={`https://myanimelist.net/anime/${meta.malId}`} target="_blank" rel="noopener">MyAnimeList ↗</a>
 		</div>
+	</header>
+
+	<div class="body">
+		{text?.fallback && <p class="fallback muted">{t.notTranslated}</p>}
+		{
+			synopsis && (
+				<details class="synopsis">
+					<summary>{t.synopsis}</summary>
+					<p>{synopsis}</p>
+				</details>
+			)
+		}
+		{info.trailerYoutubeId && <Trailer youtubeId={info.trailerYoutubeId} title={info.title} lang={lang} />}
+		{
+			meta.criteria.length > 0 && (
+				<dl class="criteria">
+					{meta.criteria.map((criterion) => (
+						<div>
+							<dt>{criterion.label[lang]}</dt>
+							<dd>{criterion.score}/10</dd>
+						</div>
+					))}
+				</dl>
+			)
+		}
+		{rendered && <div class="prose" lang={text.lang}><rendered.Content components={{ Spoiler }} /></div>}
 	</div>
-
-	{info.trailerYoutubeId && <Trailer youtubeId={info.trailerYoutubeId} title={info.title} lang={lang} />}
-
-	{
-		meta.criteria.length > 0 && (
-			<dl class="criteria">
-				{meta.criteria.map((criterion) => (
-					<div>
-						<dt>{criterion.label[lang]}</dt>
-						<dd>{criterion.score}/10</dd>
-					</div>
-				))}
-			</dl>
-		)
-	}
-
-	{rendered && <div class="prose" lang={text.lang}><rendered.Content components={{ Spoiler }} /></div>}
 </article>
 
 <style>
-	.anime-entry {
+	.hero {
+		position: relative;
+		isolation: isolate;
 		display: grid;
+		grid-template-columns: 9.5rem 1fr;
 		gap: 1.5rem;
+		align-items: end;
+		padding: 3.5rem 1.75rem 1.75rem;
+		overflow: hidden;
 	}
-	.intro {
-		display: grid;
-		grid-template-columns: minmax(0, 10rem) 1fr;
-		gap: 1.25rem;
-		align-items: start;
+	/* The poster, blown up and blurred, becomes the backdrop; it fades into the page below. */
+	.hero::before,
+	.hero::after {
+		content: "";
+		position: absolute;
+		z-index: -1;
 	}
-	@media (max-width: 30rem) {
-		.intro {
-			grid-template-columns: 1fr;
-		}
+	.hero::before {
+		inset: -3rem;
+		background: var(--poster, none) center / cover;
+		filter: blur(28px) saturate(1.4);
+		opacity: 0.55;
+	}
+	.hero::after {
+		inset: 0;
+		background: linear-gradient(to bottom, rgb(0 0 0 / 0.1), var(--bg) 95%);
 	}
 	.poster {
-		border-radius: var(--radius);
+		width: 100%;
+		height: auto;
+		border-radius: 10px;
+		box-shadow:
+			0 18px 40px rgb(0 0 0 / 0.5),
+			0 0 0 1px rgb(255 255 255 / 0.08);
+	}
+	.hero-text :global(.title) {
+		font-size: clamp(1.6rem, 4vw, 2.4rem);
+		text-wrap: balance;
 	}
 	.pitch {
+		margin: 0.9rem 0 0;
 		font-size: 1.1rem;
+	}
+	.mal {
+		display: inline-block;
+		margin-top: 0.75rem;
+		font-size: 0.85rem;
+		color: var(--muted);
+	}
+	@media (max-width: 34rem) {
+		.hero {
+			grid-template-columns: 6.5rem 1fr;
+			gap: 1rem;
+			padding: 3.5rem 1.25rem 1.25rem;
+		}
+	}
+
+	.body {
+		display: grid;
+		gap: 1.5rem;
+		padding: 0 1.75rem 1.75rem;
+	}
+	@media (max-width: 34rem) {
+		.body {
+			padding: 0 1.25rem 1.25rem;
+		}
+	}
+	.synopsis {
+		border: 1px solid var(--line);
+		border-radius: var(--radius);
+		padding: 0.75rem 1rem;
+		background: var(--surface);
+	}
+	.synopsis summary {
+		cursor: pointer;
+		font-weight: 600;
+	}
+	.synopsis p {
+		margin: 0.75rem 0 0;
+		color: var(--muted);
 	}
 	.criteria {
 		display: flex;

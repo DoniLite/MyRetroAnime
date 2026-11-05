@@ -1,7 +1,7 @@
 ---
 import "../styles/global.css";
 import SpoilerToggle from "../components/SpoilerToggle.astro";
-import { LANGS, type Lang, otherLang } from "../lib/i18n";
+import { LANGS, type Lang, ui } from "../lib/i18n";
 
 interface Props {
 	lang: Lang;
@@ -13,7 +13,6 @@ interface Props {
 }
 
 const { lang, title, description, path, theme } = Astro.props;
-const other = otherLang(lang);
 const href = (l: Lang) => new URL(`/${l}/${path}`, Astro.site).href;
 ---
 
@@ -26,6 +25,12 @@ const href = (l: Lang) => new URL(`/${l}/${path}`, Astro.site).href;
 		<meta name="description" content={description} />
 		<meta property="og:title" content={title} />
 		<meta property="og:description" content={description} />
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			rel="stylesheet"
+			href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap"
+		/>
 		<link rel="canonical" href={href(lang)} />
 		{LANGS.map((l) => <link rel="alternate" hreflang={l} href={href(l)} />)}
 		<script is:inline>
@@ -37,10 +42,22 @@ const href = (l: Lang) => new URL(`/${l}/${path}`, Astro.site).href;
 	<body style={theme}>
 		<header class="topbar">
 			<a href={`/${lang}/`} class="brand">MyRetroAnime</a>
-			<SpoilerToggle lang={lang} />
-			<a href={`/${other}/${path}`} hreflang={other} lang={other} data-lang={other} class="lang-switch">
-				{other.toUpperCase()}
-			</a>
+			<div class="controls">
+				<SpoilerToggle lang={lang} />
+				<nav class="langs" aria-label={ui[lang].language}>
+					{
+						LANGS.map((l) =>
+							l === lang ? (
+								<span aria-current="true">{l.toUpperCase()}</span>
+							) : (
+								<a href={`/${l}/${path}`} hreflang={l} lang={l} data-lang={l}>
+									{l.toUpperCase()}
+								</a>
+							),
+						)
+					}
+				</nav>
+			</div>
 		</header>
 		<slot />
 		<script>
@@ -60,16 +77,63 @@ const href = (l: Lang) => new URL(`/${l}/${path}`, Astro.site).href;
 		display: flex;
 		align-items: center;
 		gap: 1rem;
-		padding: 0.75rem 1rem;
+		padding: 0.9rem clamp(1rem, 3vw, 2rem);
 		border-bottom: 1px solid var(--line);
 	}
 	.brand {
-		font-weight: 700;
-		text-decoration: none;
 		margin-right: auto;
+		font-family: var(--font-display);
+		font-size: 1.15rem;
+		font-weight: 800;
+		letter-spacing: 0.02em;
+		text-decoration: none;
 	}
-	.lang-switch {
-		font-family: var(--font-mono);
-		padding: 0.5rem;
+	/* One translucent pill for the reader's settings. */
+	.controls {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		padding: 0.25rem;
+		border: 1px solid rgb(255 255 255 / 0.12);
+		border-radius: 999px;
+		background: rgb(14 12 22 / 0.45);
+		backdrop-filter: blur(12px);
+	}
+	.langs {
+		display: flex;
+		font-size: 0.75rem;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+	}
+	.langs > * {
+		display: grid;
+		place-items: center;
+		min-width: 2.5rem;
+		min-height: 2rem;
+		padding: 0 0.6rem;
+		border-radius: 999px;
+		text-decoration: none;
+	}
+	.langs [aria-current] {
+		background: rgb(255 255 255 / 0.14);
+	}
+	.langs a {
+		color: rgb(255 255 255 / 0.6);
+	}
+	.langs a:hover {
+		color: var(--ink);
+	}
+	@media (max-width: 30rem) {
+		.topbar {
+			gap: 0.5rem;
+			padding: 0.7rem 0.75rem;
+		}
+		.brand {
+			font-size: 1rem;
+		}
+		.langs > * {
+			min-width: 2.1rem;
+			padding: 0 0.4rem;
+		}
 	}
 </style>

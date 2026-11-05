@@ -3,7 +3,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
-import { fetchJikan, parseMalId, slugify } from "../src/lib/jikan";
+import { fetchAnime, parseMalId, slugify } from "../src/lib/jikan";
 import { SEASONS, type Season, seasonOf } from "../src/lib/seasons";
 
 const { values, positionals } = parseArgs({
@@ -33,7 +33,7 @@ for (const input of positionals) {
 		continue;
 	}
 	try {
-		const jikan = await fetchJikan(malId);
+		const jikan = await fetchAnime(malId);
 		const dir = `src/content/${values.year}/${slugify(jikan.title)}`;
 		if (existsSync(dir)) {
 			console.warn(`• ${dir} already exists, skipped`);
@@ -75,6 +75,6 @@ for (const input of positionals) {
 		console.error(`✗ ${input}: ${(error as Error).message}`);
 		failed = true;
 	}
-	await Bun.sleep(400); // Jikan allows 3 requests per second.
+	await Bun.sleep(400); // Stay well under Jikan (3 req/s) and MAL rate limits.
 }
 process.exitCode = failed ? 1 : 0;

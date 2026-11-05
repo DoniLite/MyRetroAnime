@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseMalId, pickJikan, slugify } from "./jikan";
+import { parseMalId, pickJikan, pickMal, slugify } from "./jikan";
 
 describe("parseMalId", () => {
 	it("reads bare ids and MAL URLs", () => {
@@ -54,6 +54,29 @@ describe("pickJikan", () => {
 		expect(pickJikan(base)).toMatchObject({
 			trailerYoutubeId: null,
 			image: null,
+		});
+	});
+});
+
+describe("pickMal", () => {
+	it("maps the official API and takes the newest video as trailer", () => {
+		const picked = pickMal({
+			id: 59978,
+			title: "Sousou no Frieren 2nd Season",
+			alternative_titles: { en: "", ja: "葬送のフリーレン 第2期" },
+			num_episodes: 10,
+			start_date: "2026-01-16",
+			videos: [
+				{ url: "https://youtu.be/MwP4gqRys4c", created_at: 1 },
+				{ url: "https://youtu.be/RH-FcW94z00", created_at: 2 },
+			],
+		});
+		expect(picked).toMatchObject({
+			titleEnglish: null,
+			titleJapanese: "葬送のフリーレン 第2期",
+			studios: [],
+			airedTo: null,
+			trailerYoutubeId: "RH-FcW94z00",
 		});
 	});
 });
