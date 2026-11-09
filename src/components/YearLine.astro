@@ -1,6 +1,7 @@
 ---
 import type { Anime } from "../lib/anime";
 import { type Lang, seasonNames, ui } from "../lib/i18n";
+import { mediumPoster } from "../lib/poster";
 import { groupBySeason, SEASONS } from "../lib/seasons";
 import type { Stop, YearConfig } from "../years/types";
 import AnimeEntry from "./AnimeEntry.astro";
@@ -64,10 +65,7 @@ const stops: Stop[] = [
 			};
 			addEventListener("keydown", block);
 			addEventListener("touchmove", block, { passive: false });
-			// Last resort if the scene crashes or hangs: never leave the visitor locked out.
-			setTimeout(() => {
-				if (root.classList.contains("scene-loading")) root.classList.remove("has-3d", "scene-loading");
-			}, 30000);
+			// Falling back if the scene stalls is LoadingTrain's watchdog (in Base): it waits while bytes arrive.
 		}
 	} catch {}
 </script>
@@ -86,7 +84,6 @@ const stops: Stop[] = [
 					<p>{t.emptyLine}</p>
 				) : (
 					<p class="hint" aria-live="polite">
-						<span class="hint-loading">{t.loading}</span>
 						<span class="hint-ready">{t.scrollHint}</span>
 					</p>
 				)
@@ -103,7 +100,7 @@ const stops: Stop[] = [
 				{items.map((a) => (
 					<section class="stop station-stop" id={`stop-${a.slug}`}>
 						<a href={`${lineUrl}${a.slug}/`} class="station" data-open={a.slug}>
-							{a.info.image && <img src={a.info.image} alt="" width="96" height="136" loading="lazy" />}
+							{a.info.image && <img data-src={mediumPoster(a.info.image)} alt="" width="96" height="136" fetchpriority="low" />}
 							<div class="station-body">
 								<p class="eyebrow">
 									{seasonNames[lang][season]} · {t.station} {stationNumber.get(a.slug)}/{anime.length}
@@ -151,6 +148,24 @@ const stops: Stop[] = [
 			{ threshold: 0.6 },
 		);
 		for (const stop of stops) observer.observe(stop);
+
+		// Card posters load as their stop comes within a screen (the stop sections scroll; in 3D the cards
+		// themselves are fixed): while the scene loads, scroll locked at the top, the others never compete
+		// with it for a slow connection's bandwidth.
+		const posters = new IntersectionObserver(
+			(entries) => {
+				for (const entry of entries) {
+					if (!entry.isIntersecting) continue;
+					for (const image of entry.target.querySelectorAll<HTMLImageElement>("img[data-src]")) {
+						image.src = image.dataset.src ?? "";
+						image.removeAttribute("data-src");
+					}
+					posters.unobserve(entry.target);
+				}
+			},
+			{ rootMargin: "100% 0px" },
+		);
+		for (const stop of stops) posters.observe(stop);
 
 		// The language switch follows the URL, so switching languages keeps the open entry.
 		const syncLangLinks = () => {
@@ -358,26 +373,15 @@ const stops: Stop[] = [
 	:global(:root.scene-loading .scene-canvas) {
 		opacity: 0;
 	}
-	:global(:root:not(.has-3d) .scene-canvas) {
-		display: none;
-	}
 	/* No riding before the landscape is complete: scrolling stays locked until the scene has loaded. */
 	:global(:root.scene-loading) {
 		overflow: hidden;
 	}
-	.hint-loading,
-	:global(:root.scene-loading) .hint-ready {
-		display: none;
+	/* While loading, the hint waits: LoadingTrain shows the progress. */
+	:global(:root.scene-loading) .hint {
+		visibility: hidden;
 	}
-	:global(:root.scene-loading) .hint-loading {
-		display: inline;
-		animation: pulse 1.6s ease-in-out infinite;
-	}
-	@keyframes pulse {
-		50% {
-			opacity: 0.45;
-		}
-	}
+
 	:global(.has-3d) .line {
 		max-width: none;
 		padding: 0;

@@ -1,6 +1,6 @@
 # Spec: scenes that load on slow connections
 
-Status: draft, to review with the owner before any code ships.
+Status: shipped (2026-11-09). Owner answers and what was built are at the end.
 
 ## Problem
 
@@ -85,9 +85,29 @@ Recommendation: (b) first, since compression shrinks the problem. Add (a) only i
 - Desktop (1600×900) and phone (390×844) captures of both scenes look the same as before compression: no visible loss on trees, train or terrain.
 - Existing tests, Biome, and `bun run build` pass.
 
-## Questions for the owner
+## Owner answers (2026-11-09)
 
-1. **Stall delay N.** Is 20 s with no progress before giving up on 3D right, or should it be more patient?
-2. **Progress display.** A thin line plus a percentage, or something more in the site's theme (for example the split-flap board counting up on the hall)?
-3. **Very slow or data-saving visitors.** Should a visitor who sets `Save-Data` (or whose connection reports `slow-2g`) get the 2D page straight away, without downloading the scene?
-4. **Ship order.** Fix the fallback first as a small PR, then compression in a second one? Or both together?
+1. **Stall delay:** the agent's call, with slow African connections in mind.
+2. **Progress display:** the KiHa 32 crossing a thin line from station to station, with the percentage.
+3. **No 2D shortcut** for slow or Save-Data visitors: everyone gets the 3D scene, so optimise hard instead.
+4. **One PR.**
+
+## What shipped
+
+- **Watchdog** (`components/LoadingTrain.astro`, in `Base`): no fixed timer any more. The page falls back to 2D only after 45 s with no progress at all, or 90 s before the scene's code has arrived. Scenes report progress (`components/loading.ts`) as files finish and as model bytes stream in, so a slow link that keeps delivering always ends in 3D. A file that errors falls back at once, on the hall too.
+- **Progress:** the same train indicator on the hall and the line, as `role="progressbar"`.
+- **Assets** (`bun run assets`, sources in `assets/`): WebP textures (bark down to 256 px), meshopt-compressed and quantized models (`trees.glb`, `kiha32.glb`).
+- **Pages:**
+  - MAL posters in their medium size (225 px wide), which is the size they are shown at;
+  - the entries' posters lazy;
+  - the line's card thumbnails loaded only as their stop comes near;
+  - Google Fonts trimmed to the weights in use and no longer render-blocking.
+
+| Measured, local, before gzip | Before | After                                            |
+| ---------------------------- | ------ | ------------------------------------------------ |
+| Line page, all requests      | 3.9 MB | 2.9 MB, of which MAL images 1.9 MB → 1 thumbnail |
+| Scene assets of the line     | 2.9 MB | 1.6 MB (1.3 MB gzip)                             |
+
+**Tests:**
+- At 50 KB/s with 300 ms latency, the line reaches 3D in 60 s (85 s before) and the hall in 88 s.
+- A blocked model falls back to 2D in seconds; a hanging one after 45 s of silence.

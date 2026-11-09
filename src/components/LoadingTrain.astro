@@ -1,0 +1,140 @@
+---
+import { type Lang, ui } from "../lib/i18n";
+
+interface Props {
+	lang: Lang;
+}
+const t = ui[Astro.props.lang];
+---
+
+<!--
+	While a 3D scene loads (html.scene-loading): the KiHa 32 crossing a thin line from station to station,
+	with how far along it is. Also the page's watchdog: as long as the scene reports progress it waits,
+	however slow the connection; only silence drops the page to 2D (see components/loading.ts).
+-->
+<div class="loading-train" role="progressbar" aria-label={t.loading} aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+	<div class="rail">
+		<span class="done"></span>
+		<svg class="car" viewBox="0 0 48 16" aria-hidden="true">
+			<path d="M3 2h38q5 0 6 6v5H1V5q0-3 2-3z" fill="#eef1f6" />
+			<path d="M1 9h46v2H1z" fill="#3a8fd6" />
+			<path d="M5 4h4v3H5zm8 0h6v3h-6zm9 0h6v3h-6zm9 0h6v3h-6zm9 0h3l1 3h-4z" fill="#1d2433" />
+			<circle cx="10" cy="14" r="1.6" fill="#1d2433" />
+			<circle cx="38" cy="14" r="1.6" fill="#1d2433" />
+		</svg>
+	</div>
+	<p>
+		<span class="message" data-almost={t.loadingAlmost}>{t.loading}</span>
+		<span class="percent"></span>
+	</p>
+</div>
+
+<script is:inline>
+	(() => {
+		const root = document.documentElement;
+		const bar = document.querySelector(".loading-train");
+		if (!bar || !root.classList.contains("scene-loading")) return;
+		// Slow links (2G/3G, as in much of Africa): wait as long as anything arrives, give up only on silence.
+		const STALL = 45000; // no progress at all once the scene has started loading
+		const START = 90000; // before the first report: the scene's own code is still on its way
+		const format = new Intl.NumberFormat(root.lang, { style: "percent" });
+		const message = bar.querySelector(".message");
+		const percent = bar.querySelector(".percent");
+		let last = Date.now();
+		let started = false;
+		addEventListener("scene:progress", (event) => {
+			last = Date.now();
+			started = true;
+			const p = event.detail;
+			bar.style.setProperty("--p", String(p));
+			bar.setAttribute("aria-valuenow", String(Math.round(p * 100)));
+			percent.textContent = format.format(p);
+			if (p >= 0.6) message.textContent = message.dataset.almost;
+		});
+		const watch = setInterval(() => {
+			if (!root.classList.contains("scene-loading")) return clearInterval(watch);
+			if (Date.now() - last > (started ? STALL : START)) {
+				clearInterval(watch);
+				root.classList.remove("has-3d", "scene-loading");
+			}
+		}, 1000);
+	})();
+</script>
+
+<style>
+	.loading-train {
+		display: none;
+	}
+	:global(:root.scene-loading) .loading-train {
+		--p: 0;
+		position: fixed;
+		left: 50%;
+		bottom: clamp(2.5rem, 12vh, 7rem);
+		z-index: 10;
+		display: block;
+		width: min(30rem, calc(100% - 3rem));
+		translate: -50% 0;
+		color: rgb(255 255 255 / 0.82);
+		font-size: 0.9rem;
+		text-align: center;
+	}
+	.rail {
+		position: relative;
+		height: 2px;
+		margin-bottom: 1rem;
+		background: repeating-linear-gradient(90deg, rgb(255 255 255 / 0.28) 0 6px, transparent 6px 12px);
+	}
+	/* The two stations at either end. */
+	.rail::before,
+	.rail::after {
+		content: "";
+		position: absolute;
+		top: -4px;
+		width: 10px;
+		height: 10px;
+		border-radius: 50%;
+		background: var(--accent);
+	}
+	.rail::before {
+		left: -5px;
+	}
+	.rail::after {
+		right: -5px;
+		background: rgb(255 255 255 / 0.35);
+	}
+	.done {
+		position: absolute;
+		inset: 0 auto 0 0;
+		width: calc(var(--p) * 100%);
+		background: var(--accent);
+		transition: width 0.6s ease;
+	}
+	.car {
+		position: absolute;
+		bottom: 3px;
+		left: calc(var(--p) * (100% - 48px));
+		width: 48px;
+		height: 16px;
+		transition: left 0.6s ease;
+	}
+	p {
+		display: flex;
+		justify-content: center;
+		gap: 0.6rem;
+		margin: 0;
+	}
+	.percent {
+		font-variant-numeric: tabular-nums;
+		color: var(--accent);
+	}
+	/* Out of 3D, the scene's canvas never shows (the watchdog fell back, or WebGL is missing). */
+	:global(:root:not(.has-3d) .scene-canvas) {
+		display: none;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.done,
+		.car {
+			transition: none;
+		}
+	}
+</style>

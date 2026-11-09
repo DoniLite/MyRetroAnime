@@ -24,6 +24,7 @@ import {
 	Vector3,
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { mediumPoster } from "../../lib/poster";
 import type { Season } from "../../lib/seasons";
 import { cameraStage, grovePlacement, hallHeight, propSlots } from "./layout";
 import { glowTexture, go, hover } from "./shared";
@@ -169,9 +170,6 @@ function merge(parts: Part[]) {
 		}),
 	);
 }
-
-/** MAL serves a medium poster at the same URL without the trailing "l": plenty for an atlas cell. */
-const medium = (url: string) => url.replace(/l\.(jpg|webp)$/, ".$1");
 
 /** A poster atlas sized to the grove: cells keep the 1:1.41 poster ratio, a placeholder until each loads. */
 function posterAtlas(count: number) {
@@ -437,7 +435,7 @@ export function PropField({
 				const image = new Image();
 				image.crossOrigin = "anonymous";
 				image.onload = () => field.atlas.draw(i, image);
-				image.src = medium(item.image);
+				image.src = mediumPoster(item.image);
 			});
 		}
 		// Ease each prop toward its hover state; only moving props are re-placed.
@@ -468,7 +466,10 @@ export function PropField({
 		document.body.style.cursor = "pointer";
 		const item = field.ordered[i];
 		if (item)
-			hover({ label: item.title, image: item.image && medium(item.image) });
+			hover({
+				label: item.title,
+				image: item.image && mediumPoster(item.image),
+			});
 	};
 	const leave = () => {
 		target.current = null;

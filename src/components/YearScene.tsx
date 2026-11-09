@@ -1,5 +1,6 @@
 import { type ComponentType, useCallback, useEffect, useState } from "react";
 import type { SceneProps, Stop } from "../years/types";
+import { reportProgress } from "./loading";
 
 // Each year's scene is its own lazy chunk: a 2026 visitor never downloads 2027's.
 const scenes = import.meta.glob<{ default: ComponentType<SceneProps> }>(
@@ -28,6 +29,8 @@ export default function YearScene({
 		let cancelled = false;
 		load()
 			.then((module) => {
+				// The scene's code has arrived: the watchdog now waits on its assets.
+				reportProgress(0);
 				if (!cancelled) setScene(() => module.default);
 			})
 			.catch(fallBack);

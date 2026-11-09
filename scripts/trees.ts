@@ -1,6 +1,6 @@
 // Generate the 2026 line's trees with ez-tree (MIT, Daniel Greenheck) and bake their geometry into
-// public/models/2026/trees.glb. Textures are not exported: the scene supplies its own, tinted per season.
-// Usage: bun scripts/trees.ts && bunx @gltf-transform/cli quantize public/models/2026/trees.glb public/models/2026/trees.glb
+// assets/models/2026/trees.glb. Textures are not exported: the scene supplies its own, tinted per season.
+// Usage: bun scripts/trees.ts, then `bun run assets` quantizes and compresses it into public/.
 import { Document, NodeIO } from "@gltf-transform/core";
 
 // ez-tree loads its textures through three's ImageLoader, which needs a DOM: a stub is enough
@@ -111,5 +111,5 @@ for (const variant of VARIANTS) {
 	}
 }
 
-await new NodeIO().write("public/models/2026/trees.glb", document);
+await new NodeIO().write("assets/models/2026/trees.glb", document);
 console.log(`trees.glb written, ${total} triangles in total`);

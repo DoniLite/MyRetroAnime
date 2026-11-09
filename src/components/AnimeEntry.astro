@@ -2,6 +2,7 @@
 import { render } from "astro:content";
 import type { Anime } from "../lib/anime";
 import { type Lang, ui } from "../lib/i18n";
+import { mediumPoster } from "../lib/poster";
 import AnimeHeader from "./AnimeHeader.astro";
 import Spoiler from "./mdx/Spoiler.astro";
 import Trailer from "./Trailer.astro";
@@ -18,11 +19,13 @@ const rendered = text && (await render(text.entry));
 const pitch = text?.entry.data.pitch;
 // MAL's synopsis is English-only and long: tucked away, and never shown on French pages.
 const synopsis = !pitch && lang === "en" ? info.synopsis : null;
+const poster = info.image && mediumPoster(info.image);
 ---
 
 <article class="anime-entry">
-	<header class="hero" style={info.image ? `--poster: url("${info.image}")` : undefined}>
-		{info.image && <img class="poster" src={info.image} alt="" width="225" height="318" />}
+	<header class="hero" style={poster ? `--poster: url("${poster}")` : undefined}>
+		{/* Lazy: every entry of the year sits in the page's dialog, hidden until opened. */}
+		{poster && <img class="poster" src={poster} alt="" width="225" height="318" loading="lazy" fetchpriority="low" />}
 		<div class="hero-text">
 			<AnimeHeader anime={anime} lang={lang} as="h1" />
 			{pitch && <p class="pitch" lang={text.lang}>{pitch}</p>}

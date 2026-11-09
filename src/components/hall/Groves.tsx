@@ -16,9 +16,9 @@ import {
 	SRGBColorSpace,
 	Vector3,
 } from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { Season } from "../../lib/seasons";
 import { barkMaterial, leafMaterial } from "../../years/2026/Vegetation";
+import { gltfLoader } from "../loading";
 import {
 	CLEARING_START,
 	cameraStage,
@@ -377,7 +377,7 @@ const wood = { color: "#7a5236", roughness: 0.9 } as const;
 function GroveTrees({ seasons }: { seasons: HallSeason[] }) {
 	const [meshes, setMeshes] = useState<InstancedMesh[]>([]);
 	useEffect(() => {
-		new GLTFLoader().load("/models/2026/trees.glb", (gltf) => {
+		gltfLoader().load("/models/2026/trees.glb", (gltf) => {
 			gltf.scene.updateMatrixWorld(true);
 			const built: InstancedMesh[] = [];
 			const m = new Matrix4();
