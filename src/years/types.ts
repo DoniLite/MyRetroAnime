@@ -8,6 +8,8 @@ export interface YearConfig {
 	tagline: Localized;
 	/** CSS custom properties applied to the year's pages, overriding the shared tokens. */
 	theme: Record<`--${string}`, string>;
+	/** A line or two about each season of the year, shown in the hall beside its avenue. */
+	seasons?: Partial<Record<Season, Localized>>;
 }
 
 /** One screen of a year's line. Every stop is one scroll-snapped viewport. */

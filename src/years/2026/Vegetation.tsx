@@ -88,7 +88,7 @@ function material(key: string, make: () => MeshStandardMaterial) {
 	return found;
 }
 
-function barkMaterial(bark: string) {
+export function barkMaterial(bark: string) {
 	return material(
 		`bark:${bark}`,
 		() =>
@@ -100,7 +100,7 @@ function barkMaterial(bark: string) {
 	);
 }
 
-function leafMaterial(leaf: string, tint: string) {
+export function leafMaterial(leaf: string, tint: string) {
 	return material(
 		`leaf:${leaf}:${tint}`,
 		() =>

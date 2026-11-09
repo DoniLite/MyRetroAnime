@@ -51,7 +51,7 @@ export const smoothstep = (a: number, b: number, x: number) => {
 };
 
 /** Ridged multifractal: sharp crests and deep valleys, the signature of real mountain ranges. */
-function ridged(x: number, y: number) {
+export function ridged(x: number, y: number) {
 	let value = 0;
 	let amplitude = 0.55;
 	let weight = 1;
