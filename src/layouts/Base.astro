@@ -136,4 +136,12 @@ const href = (l: Lang) => new URL(`/${l}/${path}`, Astro.site).href;
 			padding: 0 0.4rem;
 		}
 	}
+	:global(:root.has-3d .topbar) {
+		position: fixed;
+		inset: 0 0 auto;
+		z-index: 3;
+		border: 0;
+		/* Over a 3D scene (hall, year line) the bar floats: only a faint shade keeps the brand legible. */
+		background: linear-gradient(rgb(10 8 14 / 0.35), transparent);
+	}
 </style>

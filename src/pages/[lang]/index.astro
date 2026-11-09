@@ -1,7 +1,9 @@
 ---
+import HallScene from "../../components/hall/HallScene";
 import Base from "../../layouts/Base.astro";
 import { getAnimeOfYear } from "../../lib/anime";
-import { LANGS, type Lang, ui } from "../../lib/i18n";
+import { LANGS, type Lang, seasonNames, ui } from "../../lib/i18n";
+import { groupBySeason } from "../../lib/seasons";
 import { years } from "../../years";
 
 export function getStaticPaths() {
@@ -14,73 +16,672 @@ const currentYear = new Date().getFullYear();
 const departures = await Promise.all(
 	years.map(async ({ year, config }) => ({
 		year,
-		config,
+		line: config.title[lang],
 		count: (await getAnimeOfYear(year, lang)).length,
+		status: year >= currentYear ? t.atPlatform : t.terminus,
 	})),
 );
+// The valley shows the current giga season: its seasons as groves, its anime inside them.
+const current = years[0];
+const lineUrl = current ? `/${lang}/${current.year}/` : `/${lang}/`;
+const seasons = current
+	? groupBySeason(
+			(await getAnimeOfYear(current.year, lang)).map((a) => ({
+				...a,
+				season: a.meta.season,
+			})),
+		).map(({ season, items }) => ({
+			season,
+			label: seasonNames[lang][season],
+			// Featured first, in the scene and in the panels alike: the owner's best scores, then (without
+			// scores yet) the most recently aired.
+			items: items
+				.map((a) => ({
+					slug: a.slug,
+					title: a.info.title,
+					image: a.info.image,
+					score: a.meta.score,
+					airedTo: a.info.airedTo ?? null,
+				}))
+				.sort(
+					(a, b) =>
+						(b.score ?? -1) - (a.score ?? -1) ||
+						(b.airedTo ?? "").localeCompare(a.airedTo ?? ""),
+				),
+		}))
+	: [];
+const KANJI = { winter: "冬", spring: "春", summer: "夏", fall: "秋" } as const;
+/** One scroll stop per pair of groves, as laid out in the valley. */
+const pairs = seasons.flatMap((_, i) =>
+	i % 2 === 0 ? [seasons.slice(i, i + 2)] : [],
+);
+/** Split-flap cells: one tile per character, padded so every row lines up like a real board. */
+const tiles = (text: string, width: number) => [
+	...text.toUpperCase().padEnd(width, " ").slice(0, width),
+];
 ---
 
 <Base lang={lang} title="MyRetroAnime" description={t.siteTagline} path="">
-	<main>
-		<h1>MyRetroAnime</h1>
-		<p class="muted">{t.siteTagline}</p>
+	<script is:inline>
+		try {
+			if (
+				document.createElement("canvas").getContext("webgl2") &&
+				!matchMedia("(prefers-reduced-motion: reduce)").matches
+			) {
+				const root = document.documentElement;
+				root.classList.add("has-3d", "scene-loading");
+				// Never stay hidden if the scene fails.
+				setTimeout(() => root.classList.remove("scene-loading"), 15000);
+			}
+		} catch {}
+	</script>
+	<HallScene client:only="react" seasons={seasons} lineUrl={lineUrl} />
 
-		<section aria-labelledby="departures">
-			<h2 id="departures" class="board-title">{t.departures}</h2>
-			<ul class="board">
+	<main class="hall">
+		<section class="screen platform">
+		<header class="hero">
+			<p class="eyebrow">発車 · {t.departures}</p>
+			<h1>MyRetroAnime</h1>
+			<p class="tagline">{t.siteTagline}</p>
+		</header>
+
+		<section class="board" aria-labelledby="board-title">
+			<h2 id="board-title" class="board-title">
+				<span lang="ja">発車案内</span>
+				<span>{t.departures}</span>
+			</h2>
+			<div class="board-head" aria-hidden="true">
+				<span>{t.departures}</span>
+				<span>{t.line}</span>
+				<span>{t.stations}</span>
+				<span>{t.status}</span>
+			</div>
+			<ul>
 				{
-					departures.map(({ year, config, count }) => (
+					departures.map(({ year, line, count, status }) => (
 						<li>
-							<a href={`/${lang}/${year}/`} class="row">
-								<span class="year">{year}</span>
-								<span class="line">{config.title[lang]}</span>
-								<span class="count">
-									{count} {t.animeCount}
+							<a href={`/${lang}/${year}/`} class="row" data-depart>
+								<span class="visually-hidden">
+									{year} · {line} · {count} {t.animeCount} · {status}
 								</span>
-								<span class="badge">{year >= currentYear ? t.atPlatform : t.terminus}</span>
+								<span class="flaps year" aria-hidden="true">
+									{tiles(String(year), 4).map((c) => <span>{c}</span>)}
+								</span>
+								<span class="flaps line" aria-hidden="true">
+									{tiles(line, 22).map((c) => <span>{c}</span>)}
+								</span>
+								<span class="flaps count" aria-hidden="true">
+									{tiles(String(count), 3).map((c) => <span>{c}</span>)}
+								</span>
+								<span class="status" aria-hidden="true">{status}</span>
 							</a>
 						</li>
 					))
 				}
 			</ul>
 		</section>
+
+		<p class="credits">
+			Train: <a href="https://sketchfab.com/3d-models/32-kiha-32-diesel-95c5d6515ff04092987d698ab2c8442a"
+				>KIHA 32 Diesel</a
+			> by <a href="https://sketchfab.com/own.guest">own.guest</a>,
+			<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>
+		</p>
+		</section>
+
+		<!-- Each stop in the basin: an editorial block beside each of its two seasons, with its first anime and
+		     a way there. The scene's props are decoration; these links are the way in (keyboard, 2D, phones). -->
+		{
+			pairs.map((pair) => (
+				<section class="screen valley" aria-label={pair.map((s) => s.label).join(" · ")}>
+					<p class="hover-tag" aria-hidden="true">
+						<img class="preview" data-preview alt="" hidden />
+						<span data-caption></span>
+					</p>
+					<div class="seasons">
+						{pair.map(({ season, label, items }, side) => (
+							<article class={`season ${side ? "right" : "left"}`} aria-labelledby={`season-${season}`}>
+								<p class="eyebrow">
+									<span class="kanji">{KANJI[season]}</span>
+									{current?.year} · {items.length} {items.length > 1 ? t.animeUnit : t.animeOne}
+								</p>
+								<h2 id={`season-${season}`}>{label}</h2>
+								{current?.config.seasons?.[season] && (
+									<p class="lede">{current.config.seasons[season]?.[lang]}</p>
+								)}
+								<ul class="chips">
+									{items.slice(0, 5).map((item) => (
+										<li>
+											<a href={`${lineUrl}${item.slug}/`} data-depart>
+												{item.title}
+											</a>
+										</li>
+									))}
+									{items.length > 5 && (
+										<li class="more">
+											+{items.length - 5} {t.moreAnime}
+										</li>
+									)}
+								</ul>
+								<a class="go" href={`${lineUrl}#${season}`} data-depart>
+									{t.seeSeason} <span aria-hidden="true">→</span>
+								</a>
+							</article>
+						))}
+					</div>
+				</section>
+			))
+		}
 	</main>
 </Base>
 
+<script>
+	const root = document.documentElement;
+	const CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789·";
+
+	// Split-flap arrival: every tile spins through letters before settling, left to right.
+	const flip = () => {
+		const tiles = [...document.querySelectorAll<HTMLElement>(".flaps > span")];
+		const finals = tiles.map((tile) => tile.textContent ?? " ");
+		const start = performance.now();
+		const settleAt = tiles.map((_, i) => 500 + (i % 30) * 45 + Math.random() * 300);
+		const step = (now: number) => {
+			let running = false;
+			tiles.forEach((tile, i) => {
+				if (now - start >= (settleAt[i] ?? 0)) {
+					tile.textContent = finals[i] ?? " ";
+				} else if (finals[i] !== " ") {
+					running = true;
+					tile.textContent = CHARSET[Math.floor(Math.random() * CHARSET.length)] ?? " ";
+				}
+			});
+			if (running) requestAnimationFrame(step);
+		};
+		requestAnimationFrame(step);
+	};
+	if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+		// Wait for the scene to fade in, so the board comes alive in front of it.
+		if (root.classList.contains("scene-loading")) {
+			new MutationObserver((_, observer) => {
+				if (root.classList.contains("scene-loading")) return;
+				observer.disconnect();
+				flip();
+			}).observe(root, { attributes: true, attributeFilter: ["class"] });
+		} else flip();
+	}
+
+	// Choosing a destination (year, season or anime): the train pulls out, then the line opens there.
+	const depart = (url: string) => {
+		root.classList.add("departing");
+		dispatchEvent(new Event("hall:depart"));
+		setTimeout(() => {
+			location.href = url;
+		}, 1800);
+	};
+	for (const link of document.querySelectorAll<HTMLAnchorElement>("[data-depart]")) {
+		link.addEventListener("click", (event) => {
+			if (!root.classList.contains("has-3d") || event.metaKey || event.ctrlKey) return;
+			event.preventDefault();
+			depart(link.href);
+		});
+	}
+	// The groves and their props in the scene.
+	addEventListener("hall:go", (event) => depart((event as CustomEvent<string>).detail));
+	// Hovering a grove or an anime in the scene.
+	// A small tag names it (with its poster for an anime), centred low in the view.
+	const tags = [...document.querySelectorAll<HTMLElement>(".hover-tag")];
+	addEventListener("hall:hover", (event) => {
+		const detail = (event as CustomEvent<{ label: string; image?: string | null } | null>).detail;
+		for (const tag of tags) {
+			tag.classList.toggle("shown", Boolean(detail));
+			const caption = tag.querySelector<HTMLElement>("[data-caption]");
+			if (caption && detail) caption.textContent = detail.label;
+			const preview = tag.querySelector<HTMLImageElement>("[data-preview]");
+			if (!preview) continue;
+			if (detail?.image) preview.src = detail.image;
+			preview.hidden = !detail?.image;
+		}
+	});
+	// Panels slide in from their side as their stop comes into view.
+	const reveal = new IntersectionObserver(
+		(entries) => {
+			for (const entry of entries) entry.target.classList.toggle("in-view", entry.isIntersecting);
+		},
+		{ threshold: 0.55 },
+	);
+	for (const valley of document.querySelectorAll(".valley")) reveal.observe(valley);
+</script>
+
 <style>
-	.board-title {
-		font-family: var(--font-mono);
+	.hall {
+		max-width: 64rem;
+		margin: 0 auto;
+		padding: 2rem 1rem 4rem;
+	}
+	.eyebrow {
+		margin: 0 0 0.6rem;
+		font-size: 0.8rem;
+		font-weight: 700;
+		letter-spacing: 0.3em;
 		text-transform: uppercase;
-		letter-spacing: 0.15em;
 		color: var(--accent);
 	}
+	.hero h1 {
+		margin: 0;
+		font-size: clamp(2.8rem, 8vw, 6rem);
+		line-height: 1;
+	}
+	.tagline {
+		margin: 0.9rem 0 0;
+		max-width: 28rem;
+		font-size: clamp(1.05rem, 1.8vw, 1.25rem);
+		color: var(--muted);
+	}
+
+	/* The departures board: black flaps, white letters, amber status, as on a real station board. */
 	.board {
+		margin-top: 2.5rem;
+		padding: 1rem 1.1rem 1.2rem;
+		border-radius: 14px;
+		background: linear-gradient(#15171f, #0c0d12);
+		border: 1px solid rgb(255 255 255 / 0.08);
+		box-shadow:
+			0 30px 60px rgb(0 0 0 / 0.45),
+			inset 0 1px 0 rgb(255 255 255 / 0.06);
+	}
+	.board-title {
+		display: flex;
+		align-items: baseline;
+		gap: 0.8rem;
+		margin: 0 0 0.8rem;
+		font-size: 1.1rem;
+		color: #fff;
+	}
+	.board-title span:last-child {
+		font-family: var(--font);
+		font-size: 0.75rem;
+		font-weight: 700;
+		letter-spacing: 0.2em;
+		text-transform: uppercase;
+		color: var(--accent);
+	}
+	.board-head,
+	.row {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr) auto 7.5rem;
+		gap: 0.9rem;
+		align-items: center;
+	}
+	.board-head {
+		padding: 0 0.5rem 0.4rem;
+		font-size: 0.65rem;
+		font-weight: 700;
+		letter-spacing: 0.16em;
+		text-transform: uppercase;
+		color: rgb(255 255 255 / 0.45);
+	}
+	.board ul {
 		list-style: none;
 		margin: 0;
 		padding: 0;
-		border: 1px solid var(--line);
-		border-radius: var(--radius);
-		background: var(--surface);
+		display: grid;
+		gap: 0.4rem;
 	}
 	.row {
-		display: grid;
-		grid-template-columns: 4rem 1fr auto auto;
-		gap: 1rem;
-		align-items: center;
-		padding: 1rem;
-		font-family: var(--font-mono);
+		padding: 0.5rem;
+		border-radius: 8px;
 		text-decoration: none;
+		transition: background 0.2s ease;
 	}
-	.row:hover {
-		background: var(--line);
+	.row:hover,
+	.row:focus-visible {
+		background: rgb(255 255 255 / 0.06);
 	}
-	.year {
+	.flaps {
+		display: flex;
+		gap: 2px;
+		overflow: hidden;
+	}
+	.flaps > span {
+		position: relative;
+		display: grid;
+		place-items: center;
+		width: 1.15em;
+		height: 1.55em;
+		border-radius: 3px;
+		background: linear-gradient(#262833 49%, #121319 51%);
+		color: #f4f1e8;
+		font-family: var(--font-mono);
+		font-size: clamp(0.8rem, 1.6vw, 1.05rem);
 		font-weight: 700;
+		line-height: 1;
+	}
+	/* The hinge line across every tile. */
+	.flaps > span::after {
+		content: "";
+		position: absolute;
+		inset: 50% 0 auto;
+		height: 1px;
+		background: rgb(0 0 0 / 0.7);
+	}
+	.year > span {
 		color: var(--accent);
 	}
-	@media (max-width: 30rem) {
-		.row {
-			grid-template-columns: 4rem 1fr;
+	.status {
+		justify-self: end;
+		padding: 0.25rem 0.7rem;
+		border-radius: 4px;
+		background: rgb(255 179 71 / 0.12);
+		color: #ffb347;
+		font-size: 0.75rem;
+		font-weight: 700;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		animation: blink 2.4s steps(2, jump-none) infinite;
+	}
+	.credits {
+		margin: 1rem 0 0;
+		font-size: 0.7rem;
+		color: rgb(255 255 255 / 0.45);
+	}
+	.credits a {
+		color: inherit;
+	}
+	@keyframes blink {
+		50% {
+			opacity: 0.55;
 		}
+	}
+	@media (max-width: 40rem) {
+		.board-head {
+			display: none;
+		}
+		.row {
+			grid-template-columns: auto minmax(0, 1fr);
+		}
+		.count,
+		.status {
+			display: none;
+		}
+	}
+
+	/* The basin's stops: an editorial block per season, beside its avenue. */
+	.seasons {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+		gap: 2rem;
+	}
+	.season {
+		min-width: 0;
+	}
+	.season .eyebrow {
+		display: flex;
+		align-items: baseline;
+		gap: 0.6rem;
+		margin: 0;
+		letter-spacing: 0.22em;
+	}
+	.kanji {
+		font-family: "Shippori Mincho B1", serif;
+		font-size: 1.4rem;
+		letter-spacing: 0;
+		color: var(--text);
+	}
+	.season h2 {
+		margin: 0.1rem 0 0.6rem;
+		font-size: clamp(2.6rem, 6vw, 5.2rem);
+		line-height: 1;
+	}
+	.lede {
+		max-width: 32ch;
+		margin: 0 0 1.2rem;
+		font-size: clamp(1rem, 1.4vw, 1.2rem);
+		line-height: 1.5;
+		color: rgb(255 255 255 / 0.86);
+	}
+	.chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.45rem;
+		max-width: 34rem;
+		margin: 0 0 1.3rem;
+		padding: 0;
+		list-style: none;
+	}
+	.chips a,
+	.chips .more {
+		display: block;
+		max-width: 18rem;
+		padding: 0.35rem 0.8rem;
+		overflow: hidden;
+		border: 1px solid rgb(255 255 255 / 0.28);
+		border-radius: 999px;
+		background: rgb(255 255 255 / 0.06);
+		font-size: 0.85rem;
+		text-decoration: none;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		text-shadow: none;
+	}
+	.chips a:hover,
+	.chips a:focus-visible {
+		border-color: var(--accent);
+		background: rgb(255 255 255 / 0.14);
+	}
+	.chips .more {
+		border-style: dashed;
+		color: rgb(255 255 255 / 0.7);
+	}
+	.go {
+		display: inline-flex;
+		gap: 0.5rem;
+		padding-bottom: 0.2rem;
+		border-bottom: 2px solid var(--accent);
+		font-weight: 700;
+		text-decoration: none;
+	}
+	.go:hover span,
+	.go:focus-visible span {
+		transform: translateX(0.25rem);
+	}
+	.go span {
+		transition: transform 0.2s ease;
+	}
+	.hover-tag {
+		display: none;
+	}
+
+	/* Over the 3D hall: two screens, the platform then the clearing, with the scene behind both. */
+	:global(:root.has-3d) {
+		scroll-snap-type: y mandatory;
+	}
+	:global(:root.scene-loading) {
+		overflow: hidden;
+	}
+	:global(.has-3d) .hall {
+		position: relative;
+		z-index: 2;
+		max-width: none;
+		padding: 0;
+		/* The scene underneath takes clicks; only the panels on top catch them. */
+		pointer-events: none;
+		transition: opacity 0.8s ease;
+	}
+	:global(.has-3d) .hall :is(a, .board, .credits) {
+		pointer-events: auto;
+	}
+	:global(.has-3d) .screen {
+		min-height: 100svh;
+		scroll-snap-align: start;
+		display: flex;
+		flex-direction: column;
+		padding: clamp(5rem, 12vh, 8rem) clamp(1.25rem, 6vw, 5rem) clamp(0.75rem, 2.5vh, 1.5rem);
+	}
+	/* Title top-left, board and credits right at the bottom: the platform, train and valley stay in view. */
+	:global(.has-3d) .platform .board {
+		margin-top: auto;
+	}
+	/* In the clearing the two avenues own the middle of the screen: each panel stands at its season's side,
+	   low, and slides in from that side when the stop arrives. */
+	:global(.has-3d) .valley {
+		justify-content: flex-end;
+	}
+	/* Each block stands on its season's side, across most of the screen's height, and slides in from that
+	   side as the stop arrives. No box: the text sits on the scene, the avenues show between. */
+	:global(.has-3d) .valley {
+		justify-content: center;
+	}
+	:global(.has-3d) .seasons {
+		grid-template-columns: minmax(0, 30rem) minmax(0, 30rem);
+		justify-content: space-between;
+		align-items: end;
+		min-height: 62vh;
+	}
+	:global(.has-3d) .season {
+		text-shadow: 0 2px 24px rgb(8 10 24 / 0.85);
+		opacity: 0;
+		transform: translateX(-2.5rem);
+		transition:
+			opacity 0.8s ease 0.25s,
+			transform 0.8s ease 0.25s;
+	}
+	:global(.has-3d) .season.right {
+		text-align: right;
+		transform: translateX(2.5rem);
+	}
+	:global(.has-3d) .season.right :is(.eyebrow, .chips) {
+		justify-content: flex-end;
+	}
+	:global(.has-3d) .season.right .lede {
+		margin-left: auto;
+	}
+	:global(.has-3d) .season.right .chips {
+		margin-left: auto;
+	}
+	:global(.has-3d) .valley.in-view .season {
+		opacity: 1;
+		transform: none;
+	}
+	/* A soft shade on both edges, under the text: readable over the trees, no box. */
+	:global(.has-3d) .valley::before {
+		content: "";
+		position: absolute;
+		inset: 0;
+		z-index: -1;
+		background: linear-gradient(
+			90deg,
+			rgb(8 10 24 / 0.6),
+			transparent 38%,
+			transparent 62%,
+			rgb(8 10 24 / 0.6)
+		);
+		opacity: 0;
+		transition: opacity 0.8s ease;
+		pointer-events: none;
+	}
+	:global(.has-3d) .valley.in-view::before {
+		opacity: 1;
+	}
+	/* Hovering the scene: a dark glass card centred low, the poster above the name. */
+	:global(.has-3d) .hover-tag {
+		position: absolute;
+		left: 50%;
+		bottom: clamp(1rem, 4vh, 2.5rem);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.6rem;
+		max-width: 15rem;
+		margin: 0;
+		padding: 0.75rem 0.9rem 0.8rem;
+		border: 1px solid rgb(255 255 255 / 0.14);
+		border-radius: 14px;
+		background: rgb(14 12 22 / 0.68);
+		backdrop-filter: blur(10px);
+		transform: translateX(-50%);
+		text-align: center;
+		font-weight: 700;
+		font-size: 0.9rem;
+		opacity: 0;
+		transition: opacity 0.25s ease;
+		pointer-events: none;
+	}
+	:global(.has-3d) .hover-tag.shown {
+		opacity: 1;
+	}
+	:global(.has-3d) .hover-tag .preview {
+		width: 7rem;
+		aspect-ratio: 1 / 1.41;
+		object-fit: cover;
+		border-radius: 8px;
+		box-shadow: 0 12px 32px rgb(0 0 0 / 0.5);
+	}
+	:global(.has-3d) .hover-tag .preview[hidden] {
+		display: none;
+	}
+	:global(.has-3d) .valley {
+		position: relative;
+		/* The blocks slide in from beyond the edges: never widen the page. */
+		overflow-x: clip;
+	}
+	/* Phones: the two seasons stack low on the screen, smaller, two anime each. */
+	@media (max-width: 40rem) {
+		:global(.has-3d) .valley {
+			justify-content: flex-end;
+		}
+		:global(.has-3d) .seasons {
+			grid-template-columns: 1fr;
+			gap: 1.4rem;
+			min-height: 0;
+		}
+		.season h2 {
+			font-size: 2.2rem;
+		}
+		.lede {
+			margin-bottom: 0.7rem;
+			font-size: 0.92rem;
+		}
+		.chips {
+			margin-bottom: 0.7rem;
+		}
+		.chips li:nth-child(n + 3):not(.more) {
+			display: none;
+		}
+		.chips a,
+		.chips .more {
+			max-width: 11rem;
+			font-size: 0.78rem;
+		}
+	}
+
+	:global(.has-3d) .hero {
+		text-shadow: 0 4px 30px rgb(8 10 24 / 0.6);
+	}
+	:global(.has-3d) .tagline {
+		color: rgb(255 255 255 / 0.8);
+	}
+	:global(.has-3d) .board {
+		width: min(46rem, 100%);
+		background: linear-gradient(rgb(21 23 31 / 0.92), rgb(12 13 18 / 0.92));
+		backdrop-filter: blur(6px);
+	}
+	:global(.scene-canvas) {
+		transition: opacity 1.4s ease;
+	}
+	:global(:root.scene-loading .scene-canvas),
+	:global(:root.scene-loading) .board {
+		opacity: 0;
+	}
+	.board {
+		transition: opacity 1s ease;
+	}
+	:global(:root:not(.has-3d) .scene-canvas) {
+		display: none;
+	}
+	:global(:root.has-3d) {
+		background: #0b0d18;
+	}
+	:global(:root.departing) .hall {
+		opacity: 0;
 	}
 </style>

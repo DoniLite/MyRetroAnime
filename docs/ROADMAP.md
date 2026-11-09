@@ -16,12 +16,16 @@ Done:
 
 ## Next
 
-1. **Write the content.** Scores, criteria and FR/EN texts from each `notes.md`.
+The owner wants the whole site's look and experience finished before any content is written.
+
+0. **Loading on slow connections** (bug on the live site): the line drops to 2D after 30 s while still downloading. Spec to review with the owner before shipping: [specs/loading.md](specs/loading.md).
+1. **One continuous journey** (hall → ride in the train → line → station, no page reloads, level crossings, window frame, horizon depth). Spec to review before shipping: [specs/one-world.md](specs/one-world.md).
+   **Hall** (`/{lang}/`): first version done (platform, dive into the valley, season shrines with anime props). Next: more life in the scene (lit train windows, lamps flicker, birds), real-phone performance.
 2. **Entry dialog redesign** to match the scene (it still uses the first visual pass).
-3. **Hall** (`/{lang}/`): the split-flap departures board, still a plain list.
+3. **Terminus:** a last stop recapping the year (top picks, stats from `meta.json`, closing words).
 4. **MDX components:** `<Moment>`, `<Gallery>`, `<Clip>`, `<Explain>`.
-5. **Terminus:** a last stop recapping the year (top picks, stats from `meta.json`, closing words).
-6. **Performance on real phones:** measure, then add adaptive quality (fewer trees and grass, lower resolution, simpler far trees) if needed.
+5. **Performance on real phones:** measure, then add adaptive quality (fewer trees and grass, lower resolution, simpler far trees) if needed.
+6. **Write the content** (including the hall's season lines in `src/years/2026/index.ts`, drafted by the agent; scores, criteria, FR/EN texts from each `notes.md`), once the experience is done.
 
 Backlog: line mini-map, outside camera shots on season transitions, ambient sound (off by default), reading mode toggle, import from the owner's MAL list.
 
