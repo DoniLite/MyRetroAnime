@@ -21,6 +21,7 @@ import {
 	TextureLoader,
 } from "three";
 import type { SceneProps, Stop } from "../types";
+import { SpeedBlur } from "./Cabin";
 import year from "./index";
 import { blendInto, createPalette, type Palette } from "./palette";
 import * as glsl from "./shaders";
@@ -131,6 +132,7 @@ export default function Scene({ stops, onReady, onFail }: SceneProps) {
 }
 
 function Line({ stops }: SceneProps) {
+	const motion = useMemo(() => ({ velocity: 0, lean: 0 }), []);
 	const palette = useMemo(createPalette, []);
 	const shared = useMemo(() => createShared(palette), [palette]);
 	const started = useRef(false);
@@ -143,7 +145,7 @@ function Line({ stops }: SceneProps) {
 			camera.updateProjectionMatrix();
 		}
 		const target = scrollProgress(stops.length);
-		const current = camera.position.x / SPACING;
+		const current = (camera.position.x - motion.lean) / SPACING;
 		// First frame jumps straight to the scroll position (deep links), then eases like a train.
 		const next = started.current
 			? current + (target - current) * (1 - Math.exp(-delta * 2.5))
@@ -151,9 +153,30 @@ function Line({ stops }: SceneProps) {
 		started.current = true;
 
 		const speed = Math.min(1, Math.abs(target - next) * 3);
-		camera.position.x = next * SPACING;
+		// On board: the car leans forward as it brakes and settles back, rolls gently, hums with speed and
+		// knocks at every rail joint.
+		const velocity = (next - current) / Math.max(delta, 1e-3);
+		const braking = Math.max(
+			-1,
+			Math.min(
+				1,
+				(Math.abs(motion.velocity) - Math.abs(velocity)) /
+					Math.max(delta, 1e-3),
+			),
+		);
+		motion.velocity = velocity;
+		motion.lean +=
+			(braking * Math.sign(velocity || 1) * 0.35 - motion.lean) *
+			(1 - Math.exp(-delta * 3));
+		const time = clock.elapsedTime;
+		const joint = (next * SPACING) / 25;
+		const knock = Math.exp(-(joint - Math.floor(joint)) * 30) * 0.025 * speed;
+		camera.position.x = next * SPACING + motion.lean;
 		camera.position.y =
-			CAMERA.y + Math.sin(clock.elapsedTime * 17) * 0.01 * (0.2 + speed);
+			CAMERA.y + Math.sin(time * 17) * 0.012 * (0.2 + speed) + knock;
+		camera.rotation.z = Math.sin(time * 0.9) * 0.005 * (0.15 + speed);
+		shared.uSpeed.value +=
+			(speed - shared.uSpeed.value) * (1 - Math.exp(-delta * 4));
 
 		const { from, to, t } = seasonsAt(stops, next);
 		blendInto(palette, from, to, t);
@@ -202,6 +225,7 @@ function Line({ stops }: SceneProps) {
 						<SeasonTitle key={stop.season} x={i * SPACING} stop={stop} />
 					),
 			)}
+			<SpeedBlur speed={shared.uSpeed} camX={shared.uCamX} />
 			<Foreground palette={palette} length={length} />
 			<Particles palette={palette} shared={shared} />
 		</>
@@ -219,6 +243,8 @@ function createShared(palette: Palette) {
 		uHaze: { value: new Color() },
 		uFogDensity: { value: FOG_DENSITY },
 		uAspect: { value: 1 },
+		/** How fast the train runs, 0 (standing at a stop) to 1. */
+		uSpeed: { value: 0 },
 		uFallSpeed: { value: palette.fallSpeed },
 		uSway: { value: palette.sway },
 		uSize: { value: palette.size },
