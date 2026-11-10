@@ -1,18 +1,29 @@
-import { useEffect, useMemo } from "react";
+import { useThree } from "@react-three/fiber";
+import { useEffect, useMemo, useState } from "react";
 import {
-	type BufferGeometry,
+	Box3,
 	Color,
-	ConeGeometry,
-	CylinderGeometry,
-	Float32BufferAttribute,
+	DirectionalLight,
+	DoubleSide,
+	HemisphereLight,
 	InstancedMesh,
+	LinearMipmapLinearFilter,
 	Matrix4,
-	MeshStandardMaterial,
+	Mesh,
+	MeshBasicMaterial,
+	type MeshStandardMaterial,
+	OrthographicCamera,
+	PlaneGeometry,
 	Quaternion,
+	Scene,
 	Vector3,
+	type WebGLRenderer,
+	WebGLRenderTarget,
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { fbm } from "../../years/2026/terrain";
+import { barkMaterial, leafMaterial } from "../../years/2026/Vegetation";
+import { gltfLoader } from "../loading";
 import {
 	cameraStage,
 	hallHeight,
@@ -25,39 +36,91 @@ import {
 import { random } from "./shared";
 
 /**
- * The forest that clothes every slope of the valley, far from the camera: thousands of simple pines (about
- * 60 triangles each, one draw call) where the detailed trees (8k triangles each) could only be counted in
- * hundreds. Seen through the haze they read as dense woods; the detailed trees stay near the visitor.
+ * The forest that clothes every slope of the valley, far from the camera. Thousands of detailed trees (8k
+ * triangles each) would not hold on a phone, so the hall photographs the line's own pine once, with its
+ * textures and under the hall's light, and plants that picture on two crossed cards: the far woods look
+ * like the near ones at four triangles a tree.
  */
 
-function pineGeometry() {
-	const parts: [BufferGeometry, string][] = [
-		[new CylinderGeometry(0.22, 0.32, 2.4, 5).translate(0, 1.2, 0), "#3b2a20"],
-		[new ConeGeometry(2.4, 4, 7).translate(0, 3.6, 0), "#2f4a34"],
-		[new ConeGeometry(1.85, 3.4, 7).translate(0, 5.6, 0), "#35523a"],
-		[new ConeGeometry(1.2, 2.8, 7).translate(0, 7.4, 0), "#3b5a40"],
-	];
-	return mergeGeometries(
-		parts.map(([geometry, color]) => {
-			const flat = geometry.toNonIndexed();
-			const { r, g, b } = new Color(color);
-			const count = flat.attributes.position?.count ?? 0;
-			const colors = new Float32Array(count * 3);
-			for (let i = 0; i < count; i++) colors.set([r, g, b], i * 3);
-			flat.setAttribute("color", new Float32BufferAttribute(colors, 3));
-			return flat;
-		}),
+const PINE = "pine_1";
+const PINE_TINT = "#4f6f4a";
+/** The hall's lights, repeated in the photo booth so the picture is lit like the trees around it. */
+const LIGHTS = () => {
+	const sun = new DirectionalLight("#ffc9a0", 0.7);
+	sun.position.set(-30, 25, -60);
+	return [new HemisphereLight("#7f8fc4", "#20243a", 0.9), sun];
+};
+
+const loaded = (materials: MeshStandardMaterial[]) =>
+	new Promise<void>((resolve) => {
+		const wait = () =>
+			materials.every(
+				(m) => m.map?.image && (!m.normalMap || m.normalMap.image),
+			)
+				? resolve()
+				: requestAnimationFrame(wait);
+		wait();
+	});
+
+/** The pine seen from the front, on a transparent card, and the card's size in world units. */
+function photograph(renderer: WebGLRenderer, parts: Mesh[]) {
+	const booth = new Scene();
+	booth.add(...LIGHTS(), ...parts);
+	const box = new Box3().setFromObject(booth);
+	const half = Math.max(-box.min.x, box.max.x, -box.min.z, box.max.z);
+	const height = box.max.y - box.min.y;
+	const camera = new OrthographicCamera(
+		-half,
+		half,
+		box.max.y,
+		box.min.y,
+		0.1,
+		200,
 	);
+	camera.position.set(0, 0, 100);
+	const target = new WebGLRenderTarget(
+		256,
+		Math.round((256 * height) / (2 * half)),
+	);
+	target.texture.generateMipmaps = true;
+	target.texture.minFilter = LinearMipmapLinearFilter;
+	const previous = renderer.getRenderTarget();
+	const clear = renderer.getClearColor(new Color());
+	const alpha = renderer.getClearAlpha();
+	// Cleared to the foliage's own dark green, so the softened edges of far cards never turn black.
+	renderer.setClearColor(new Color(PINE_TINT).multiplyScalar(0.25), 0);
+	renderer.setRenderTarget(target);
+	renderer.clear();
+	renderer.render(booth, camera);
+	renderer.setRenderTarget(previous);
+	renderer.setClearColor(clear, alpha);
+	return {
+		texture: target.texture,
+		target,
+		width: 2 * half,
+		height,
+		bottom: box.min.y,
+	};
+}
+
+function crossedCards(width: number, height: number, bottom: number) {
+	const card = new PlaneGeometry(width, height).translate(
+		0,
+		bottom + height / 2,
+		0,
+	);
+	return mergeGeometries([card, card.clone().rotateY(Math.PI / 2)]);
 }
 
 /** Item counts of each season: their avenues stay open. */
 export function Woods({ counts }: { counts: number[] }) {
-	const mesh = useMemo(() => {
+	const renderer = useThree((state) => state.gl);
+	const [mesh, setMesh] = useState<InstancedMesh>();
+	const spots = useMemo(() => {
 		const rand = random(31);
 		const avenues = counts.map((n, i) => sando(i, sandoLength(n)));
 		const cameras = [1, 2, 3].map((stage) => cameraStage(stage).position);
 		const spots: Matrix4[] = [];
-		const tints: Color[] = [];
 		const m = new Matrix4();
 		const turn = new Quaternion();
 		const up = new Vector3(0, 1, 0);
@@ -95,7 +158,7 @@ export function Woods({ counts }: { counts: number[] }) {
 				return Math.hypot(x - ax - (bx - ax) * t, z - az - (bz - az) * t) < 16;
 			});
 			if (nearAvenue) continue;
-			const size = 0.9 + rand() * 0.8;
+			const size = 0.6 + rand() * 0.5;
 			turn.setFromAxisAngle(up, rand() * Math.PI * 2);
 			m.compose(
 				new Vector3(x, y - 0.3, z),
@@ -103,29 +166,59 @@ export function Woods({ counts }: { counts: number[] }) {
 				new Vector3(size, size * (0.9 + rand() * 0.4), size),
 			);
 			spots.push(m.clone());
-			tints.push(
-				new Color().setHSL(0.36 + rand() * 0.05, 0.25, 0.55 + rand() * 0.3),
-			);
 		}
-		const mesh = new InstancedMesh(
-			pineGeometry(),
-			new MeshStandardMaterial({ vertexColors: true, roughness: 1 }),
-			spots.length,
-		);
-		spots.forEach((spot, i) => {
-			mesh.setMatrixAt(i, spot);
-			mesh.setColorAt(i, tints[i] as Color);
-		});
-		mesh.computeBoundingSphere();
-		return mesh;
+		return spots;
 	}, [counts]);
-	useEffect(
-		() => () => {
-			mesh.geometry.dispose();
-			(mesh.material as MeshStandardMaterial).dispose();
-			mesh.dispose();
-		},
-		[mesh],
-	);
-	return <primitive object={mesh} />;
+
+	useEffect(() => {
+		let cancelled = false;
+		let built: { mesh: InstancedMesh; dispose: () => void } | undefined;
+		// load() rather than loadAsync(): the scene stays in its loading state until the pine is planted.
+		gltfLoader().load("/models/2026/trees.glb", async (gltf) => {
+			gltf.scene.updateMatrixWorld(true);
+			const materials = [barkMaterial("pine"), leafMaterial("pine", PINE_TINT)];
+			const parts = (["branches", "leaves"] as const).flatMap((part, i) => {
+				const node = gltf.scene.getObjectByName(`${PINE}_${part}`);
+				if (!(node instanceof Mesh)) return [];
+				const mesh = new Mesh(node.geometry, materials[i]);
+				mesh.applyMatrix4(node.matrixWorld);
+				return [mesh];
+			});
+			await loaded(materials);
+			if (cancelled) return;
+			const photo = photograph(renderer, parts);
+			const material = new MeshBasicMaterial({
+				map: photo.texture,
+				alphaTest: 0.45,
+				side: DoubleSide,
+			});
+			const mesh = new InstancedMesh(
+				crossedCards(photo.width, photo.height, photo.bottom),
+				material,
+				spots.length,
+			);
+			const shade = random(43);
+			const tint = new Color();
+			spots.forEach((spot, i) => {
+				mesh.setMatrixAt(i, spot);
+				mesh.setColorAt(i, tint.setScalar(0.8 + shade() * 0.25));
+			});
+			mesh.computeBoundingSphere();
+			built = {
+				mesh,
+				dispose: () => {
+					mesh.geometry.dispose();
+					material.dispose();
+					photo.target.dispose();
+					mesh.dispose();
+				},
+			};
+			setMesh(mesh);
+		});
+		return () => {
+			cancelled = true;
+			built?.dispose();
+		};
+	}, [renderer, spots]);
+	return mesh ? <primitive object={mesh} /> : null;
 }

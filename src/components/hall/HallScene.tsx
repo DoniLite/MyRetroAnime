@@ -378,7 +378,7 @@ function Forest() {
 				return seed / 2147483647;
 			};
 			const m = new Matrix4();
-			// ~250 detailed trees (~8k triangles each) near the track; the far slopes are Woods' simple pines.
+			// ~250 detailed trees (~8k triangles each) near the track; the far slopes are Woods' pine cards.
 			for (let n = 0; n < 500; n++) {
 				let x: number;
 				let z: number;
