@@ -15,6 +15,8 @@ A yearly, immersive retrospective of the anime the owner watched (one **giga sea
 ## Gotchas
 
 - `bun run build` runs `astro check`, which needs TypeScript 6 (not 7).
+- 3D assets are generated: edit the sources in `assets/`, run `bun run assets`, commit both. The served copies in `public/` are WebP textures and meshopt-compressed models; load models with `gltfLoader()` from `src/components/loading.ts`, never a bare `GLTFLoader`.
+- Slow connections matter (much of the audience is in Africa): never add a fixed loading timeout; scenes report progress with `reportProgress()` and `LoadingTrain` decides.
 - Biome cannot see `.astro` templates: unused-import rules are off for them; `jikan.json` caches are excluded from formatting.
 - R3F copies JSX `uniforms`: shader materials are built by hand (`useShader` in `Scene.tsx`) so per-frame uniform updates reach the GPU.
 - Custom shaders end with `#include <tonemapping_fragment>` and `#include <colorspace_fragment>`, or they render darker than three's own materials.

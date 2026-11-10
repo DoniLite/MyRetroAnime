@@ -17,7 +17,7 @@ import {
 	TextureLoader,
 	Vector3,
 } from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { gltfLoader } from "../../components/loading";
 import type { Stop } from "../types";
 import { type Placement, scatterVegetation } from "./scatter";
 import * as glsl from "./shaders";
@@ -93,8 +93,8 @@ export function barkMaterial(bark: string) {
 		`bark:${bark}`,
 		() =>
 			new MeshStandardMaterial({
-				map: treeTexture(`bark_${bark}_color.jpg`, true),
-				normalMap: treeTexture(`bark_${bark}_normal.jpg`, false),
+				map: treeTexture(`bark_${bark}_color.webp`, true),
+				normalMap: treeTexture(`bark_${bark}_normal.webp`, false),
 				roughness: 0.95,
 			}),
 	);
@@ -105,7 +105,7 @@ export function leafMaterial(leaf: string, tint: string) {
 		`leaf:${leaf}:${tint}`,
 		() =>
 			new MeshStandardMaterial({
-				map: treeTexture(`leaf_${leaf}.png`, true),
+				map: treeTexture(`leaf_${leaf}.webp`, true),
 				color: new Color(tint),
 				// Light passing through the leaves: foliage seen against the sun never turns to a dark blot.
 				emissive: new Color(tint),
@@ -128,7 +128,7 @@ export function Forest({ stops, length }: { stops: Stop[]; length: number }) {
 		let cancelled = false;
 		// load() rather than loadAsync(): the callback runs before the loading manager marks the model
 		// done, so the leaf and bark textures queued here keep the scene's "fully loaded" signal waiting.
-		new GLTFLoader().load(
+		gltfLoader().load(
 			"/models/2026/trees.glb",
 			(gltf) => {
 				if (cancelled) return;

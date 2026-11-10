@@ -21,12 +21,12 @@ import {
 	TextureLoader,
 	Vector3,
 } from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { Season } from "../../lib/seasons";
 import { PALETTES } from "../../years/2026/palette";
 import { terrainFragment, terrainVertex } from "../../years/2026/shaders";
 import { fbm, smoothstep } from "../../years/2026/terrain";
 import { barkMaterial, leafMaterial } from "../../years/2026/Vegetation";
+import { gltfLoader, reportProgress } from "../loading";
 import { Crossing } from "./Crossing";
 import { Groves, type HallSeason } from "./Groves";
 import { Horizon } from "./Horizon";
@@ -51,8 +51,8 @@ import { Woods } from "./Woods";
  * train, into a clearing where the current year's seasons stand as groves, two on each side.
  */
 
-/** CC-BY model, see public/models/hall/LICENSE.md. Missing file: the hall simply has no train. */
-const TRAIN_URL = "/models/hall/kiha32/scene.gltf";
+/** CC-BY model, see public/models/hall/LICENSE.md. */
+const TRAIN_URL = "/models/hall/kiha32.glb";
 // The sky's horizon tone, so the haze melts the far ranges into it.
 const HAZE = new Color("#4d5c9e");
 
@@ -73,9 +73,23 @@ export default function HallScene({
 	const [canvasReady, setCanvasReady] = useState(false);
 
 	useEffect(() => {
-		DefaultLoadingManager.onLoad = () => setLoaded(true);
+		// The scene's code has arrived: the watchdog now waits on its assets.
+		reportProgress(0);
+		// A file that fails means a broken valley: show the 2D hall rather than reveal it half-built.
+		let failed = false;
+		DefaultLoadingManager.onError = () => {
+			failed = true;
+		};
+		DefaultLoadingManager.onLoad = () =>
+			failed
+				? document.documentElement.classList.remove("has-3d", "scene-loading")
+				: setLoaded(true);
+		DefaultLoadingManager.onProgress = (_, loaded, total) =>
+			reportProgress(loaded / total);
 		return () => {
 			DefaultLoadingManager.onLoad = () => {};
+			DefaultLoadingManager.onError = () => {};
+			DefaultLoadingManager.onProgress = () => {};
 		};
 	}, []);
 
@@ -313,7 +327,7 @@ function hallTerrain(seasons: Season[]) {
 }
 
 function terrainTexture(name: string, color: boolean) {
-	const texture = new TextureLoader().load(`/textures/2026/${name}.jpg`);
+	const texture = new TextureLoader().load(`/textures/2026/${name}.webp`);
 	texture.wrapS = texture.wrapT = RepeatWrapping;
 	texture.anisotropy = 8;
 	if (color) texture.colorSpace = SRGBColorSpace;
@@ -354,7 +368,7 @@ function Terrain({ seasons }: { seasons: Season[] }) {
 function Forest() {
 	const [meshes, setMeshes] = useState<InstancedMesh[]>([]);
 	useEffect(() => {
-		new GLTFLoader().load("/models/2026/trees.glb", (gltf) => {
+		gltfLoader().load("/models/2026/trees.glb", (gltf) => {
 			gltf.scene.updateMatrixWorld(true);
 			const names = ["pine_1", "pine_2", "pine_large_1"];
 			const spots: Matrix4[][] = names.map(() => []);
@@ -364,7 +378,7 @@ function Forest() {
 				return seed / 2147483647;
 			};
 			const m = new Matrix4();
-			// ~250 detailed trees (~8k triangles each) near the track; the far slopes are Woods' simple pines.
+			// ~250 detailed trees (~8k triangles each) near the track; the far slopes are Woods' pine cards.
 			for (let n = 0; n < 500; n++) {
 				let x: number;
 				let z: number;
@@ -600,7 +614,7 @@ function Train() {
 	const departing = useRef<number | null>(null);
 
 	useEffect(() => {
-		new GLTFLoader().load(
+		gltfLoader().load(
 			TRAIN_URL,
 			(gltf) => {
 				const train = gltf.scene;

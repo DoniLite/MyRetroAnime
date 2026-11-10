@@ -69,9 +69,8 @@ const tiles = (text: string, width: number) => [
 				!matchMedia("(prefers-reduced-motion: reduce)").matches
 			) {
 				const root = document.documentElement;
+				// Falling back if the scene stalls is LoadingTrain's watchdog (in Base): it waits while bytes arrive.
 				root.classList.add("has-3d", "scene-loading");
-				// Never stay hidden if the scene fails.
-				setTimeout(() => root.classList.remove("scene-loading"), 15000);
 			}
 		} catch {}
 	</script>

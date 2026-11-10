@@ -20,6 +20,7 @@ import {
 	SRGBColorSpace,
 	TextureLoader,
 } from "three";
+import { reportProgress } from "../../components/loading";
 import type { SceneProps, Stop } from "../types";
 import { SpeedBlur } from "./Cabin";
 import year from "./index";
@@ -86,9 +87,12 @@ export default function Scene({ stops, onReady, onFail }: SceneProps) {
 		};
 		DefaultLoadingManager.onLoad = () =>
 			failed ? onFail?.() : setAssetsLoaded(true);
+		DefaultLoadingManager.onProgress = (_, loaded, total) =>
+			reportProgress(loaded / total);
 		return () => {
 			DefaultLoadingManager.onLoad = () => {};
 			DefaultLoadingManager.onError = () => {};
+			DefaultLoadingManager.onProgress = () => {};
 		};
 	}, [onFail]);
 
@@ -333,7 +337,7 @@ function Atmosphere({ palette, shared }: { palette: Palette; shared: Shared }) {
 
 /** CC0 Poly Haven textures (see public/textures/2026/LICENSE.md), repeated across the whole terrain. */
 function terrainTexture(name: string, color: boolean) {
-	const texture = new TextureLoader().load(`/textures/2026/${name}.jpg`);
+	const texture = new TextureLoader().load(`/textures/2026/${name}.webp`);
 	texture.wrapS = texture.wrapT = RepeatWrapping;
 	texture.anisotropy = 8;
 	if (color) texture.colorSpace = SRGBColorSpace;

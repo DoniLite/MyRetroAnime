@@ -18,7 +18,7 @@ Done:
 
 The owner wants the whole site's look and experience finished before any content is written.
 
-0. **Loading on slow connections** (bug on the live site): the line drops to 2D after 30 s while still downloading. Spec to review with the owner before shipping: [specs/loading.md](specs/loading.md).
+0. **Loading on slow connections**: done. No more 2D fallback while bytes arrive, a progress train, assets halved ([specs/loading.md](specs/loading.md)). Next: measure on a real phone on a slow network.
 1. **One continuous journey** (hall → ride in the train → line → station, no page reloads, level crossings, window frame, horizon depth). Spec to review before shipping: [specs/one-world.md](specs/one-world.md).
    **Hall** (`/{lang}/`): first version done (platform, dive into the valley, season shrines with anime props). Next: more life in the scene (lit train windows, lamps flicker, birds), real-phone performance.
 2. **Entry dialog redesign** to match the scene (it still uses the first visual pass).

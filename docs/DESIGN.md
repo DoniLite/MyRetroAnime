@@ -21,7 +21,8 @@ src/
   components/              shared UI (header, entry, trailer facade, spoilers)
   pages/                   routes
 scripts/                   new.ts (scaffold anime), sync-jikan.ts (refresh cache), trees.ts (generate 2026 tree models)
-public/models|textures/<year>/   the year's 3D assets, each folder with its LICENSE.md
+assets/                         sources of the 3D assets; `bun run assets` writes the compressed copies to public/
+public/models|textures/<year>/   the year's 3D assets as served (WebP, meshopt), each folder with its LICENSE.md
 ```
 
 Adding a year = adding `src/years/<year>/index.ts`. Content in a year folder without a matching year module fails the build.
